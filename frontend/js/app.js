@@ -748,9 +748,7 @@ const App = {
       AI_FIELDS.forEach(f => {
         const value = v ? v[f.aiKey] : null;
         if (it.edited[f.key] || it.values[f.key]) return;   // never overwrite the user's choice
-        const allowed = f.el.tagName === 'SELECT' ? Array.from(f.el.options).map(o => o.value)
-          : (f.el.tagName === 'DIV' ? Array.from(f.el.querySelectorAll('input')).map(i => i.value) : null);
-        if (!value || (allowed && !allowed.includes(value))) {
+        if (!value || (f.el.tagName === 'SELECT' && !Array.from(f.el.options).some(o => o.value === value))) {
           missing.push(f.label);
           return;
         }
@@ -765,7 +763,7 @@ const App = {
       const a = state.analysis;
       const it = activeItem() || state.items.get('original');
       const whose = it.key === 'original' ? '' : ` for the ${Utils.escapeHTML(it.label.toLowerCase())}`;
-      const found = AI_FIELDS.filter(f => it.ai[f.key] && !it.edited[f.key]).map(f => Utils.escapeHTML(Utils.formatList(it.values[f.key], ' / ')));
+      const found = AI_FIELDS.filter(f => it.ai[f.key] && !it.edited[f.key]).map(f => Utils.escapeHTML(Utils.capitalize(it.values[f.key])));
       const missing = AI_FIELDS.filter(f => !it.values[f.key]).map(f => f.label);
       let html = found.length
         ? `<i data-lucide="sparkles"></i> AI detected${whose}: <strong>${found.join(' · ')}</strong>. Check and correct if needed.`
@@ -868,11 +866,10 @@ const App = {
         ? 'Outlined with SAM 3'
         : 'Cut out with the on-device clothing model' + (extraction.fallbackReason ? ` (${extraction.fallbackReason})` : '');
       let note = ok.length
-        ? `Extracted ${ok.length} garment${ok.length > 1 ? 's' : ''} (${ok.map(g => g.name.toLowerCase()).join(', ')}). ` +
-          `Tick the ones to add — each becomes its own wardrobe item. ${how}; pixels are copied unchanged from your photo, and parts hidden by arms, hair or other clothes stay missing.`
+        ? 'Tick items you want to add'
         : 'No garment could be isolated reliably, so nothing was extracted. You can still add the original photo.';
       if (failed.length) note += ` Not extracted: ${failed.map(g => g.name.toLowerCase()).join(', ')} (see the cards).`;
-      setNote(note, ok.length ? 'info' : 'error');
+      setNote(note.trim(), ok.length ? 'info' : 'error');
     }
 
     const runBeautify = async ({ force = false } = {}) => {
@@ -988,9 +985,9 @@ const App = {
     const itemProblems = (it) => {
       const v = it.values, p = [];
       if (!v.type) p.push(['error-type', typeEl, 'Select a type.']);
-      if (!v.color) p.push(['error-color', colorEl, 'Select at least one colour.']);
+      if (!v.color) p.push(['error-color', colorEl, 'Select a colour.']);
       if (!v.seasons.length) p.push(['error-season', null, 'Select at least one season.']);
-      if (!v.occasion) p.push(['error-occasion', occasionEl, 'Select at least one occasion.']);
+      if (!v.occasion) p.push(['error-occasion', occasionEl, 'Select an occasion.']);
       const price = String(v.price || '').trim();
       if (price && (!Number.isFinite(Number(price)) || Number(price) < 0)) p.push(['error-price', priceEl, 'Enter a price of 0 or more.']);
       return p;
@@ -1088,7 +1085,7 @@ const App = {
         }
 
         Toast.success(added.length > 1 ? `${added.length} Pieces Added` : 'Piece Added',
-          added.map(it => `${Utils.formatList(it.values.color, ' / ')} ${Utils.capitalize(it.values.type)}`).join(', ') + ' added to your wardrobe.');
+          added.map(it => `${Utils.capitalize(it.values.color)} ${Utils.capitalize(it.values.type)}`).join(', ') + ' added to your wardrobe.');
         state.saving = false;
         if (addModal) addModal.classList.remove('active');
         form.reset();

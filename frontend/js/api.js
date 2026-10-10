@@ -39,7 +39,7 @@ const DB = {
   },
 
   /** frontend shape -> DB row */
-  toRow(i) {
+    toRow(i) {
     const row = {};
     if (i.type !== undefined) row.type = i.type;
     if (i.color !== undefined) row.color = i.color;
@@ -49,12 +49,10 @@ const DB = {
     if (i.wearCount !== undefined) row.wear_count = i.wearCount;
     if (i.lastWornDate !== undefined) row.last_worn_date = i.lastWornDate;
     if (i.name !== undefined) row.name = i.name;
-    // Details entered in the Add to Wardrobe form (existing columns)
     if (i.brand !== undefined) row.brand = i.brand;
     if (i.season !== undefined) row.season = i.season;
     if (i.occasion !== undefined) row.occasion = i.occasion;
-    if (i.rating !== undefined) row.rating = i.rating;
-    if (i.originalImagePath !== undefined) row.original_image_path = i.originalImagePath;
+    if (i.rating !== undefined) row.rating = i.rating === '' || i.rating === null ? null : Number(i.rating);
     return row;
   },
 };

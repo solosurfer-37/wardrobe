@@ -55,6 +55,8 @@ The brain of the application lives in the `OutfitRecommendationService`, utilizi
 | `POST` | `/api/clothes` | Upload a new clothing item |
 | `GET` | `/api/clothes` | Retrieve all items in the closet |
 | `GET` | `/api/clothes/least-worn` | Retrieve items sorted by `wearCount` ascending |
+| `POST` | `/api/clothes/{id}/upload-image` | Store the item's final image (and optional `original`) in Supabase Storage |
+| `GET` | `/api/clothes/{id}/image` | Redirects to a fresh signed URL for the stored image (used by wardrobe cards) |
 
 ### ✨ AI Recommendations (`/api/outfits`)
 | Method | Endpoint | Description |
@@ -71,6 +73,19 @@ The brain of the application lives in the `OutfitRecommendationService`, utilizi
 | Method | Endpoint | Description |
 |---|---|---|
 | `GET` | `/api/vision/analyze-image` | Mocks Computer Vision ML tagging & categorization |
+| `POST` | `/api/vision/analyze-image` | **Real** AI recognition (Gemini) of category, primary colour and pattern for the Add to Wardrobe modal. Needs `GEMINI_API_KEY`; unsure values come back as `null` |
+
+### 📸 Add to Wardrobe flow
+1. **Upload Image** → the photo is checked in the browser.
+2. **AI recognition** (backend, Gemini, **one request per photo**) pre-fills Type, Color and Pattern — for the main garment and for each garment in an outfit photo. Season, Occasion, Brand, Rating and Price are always entered by the user.
+3. **Beautify** splits the photo into **one product image per garment**:
+   - **SAM 3 via Roboflow** (backend, `POST /api/vision/segment-garments`, needs `ROBOFLOW_API_KEY`): text prompts such as "jacket", "t-shirt", "jeans", "shoes" return a separate outline per garment, so a jacket and the shirt under it become separate items and flat-lay photos work too. Left and right shoes are merged into one pair.
+   - **Fallback**: if SAM 3 is not configured, the backend is not running or the quota is used up, an on-device clothing-segmentation model (Transformers.js + `Xenova/segformer_b0_clothes`) is used automatically.
+   - Either way the garment is cut out of the original pixels (never redrawn), and the original photo is always kept.
+4. The user ticks which images to add — the whole photo or individual garments (never both, to avoid duplicates). Each ticked garment is its own item with its own details, edited via tabs.
+5. **Add to Wardrobe** saves each item through Supabase (`API.addClothingItem`): image (and original photo) uploaded to the `clothes` bucket first, rolled back if the insert fails. Items already added are never added again on retry.
+
+Configuration (`.env`, backend only): `GEMINI_API_KEY` (free key from Google AI Studio), optional `GEMINI_MODEL` (default `gemini-flash-latest`) and `VISION_MIN_CONFIDENCE` (default `0.6`); `ROBOFLOW_API_KEY` (free tier at app.roboflow.com) for SAM 3. Without keys the modal still works: manual entry, and the on-device model for Beautify. The frontend reaches the backend at `CONFIG.API_BASE_URL` (default `http://localhost:8080`).
 | `GET` | `/api/ocr/parse-receipt` | Mocks automated receipt parsing via OCR |
 | `GET` | `/api/calendar/today-events` | Mocks Calendar integration for event-driven dress codes |
 

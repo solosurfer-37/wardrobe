@@ -21,6 +21,7 @@
   <link rel="stylesheet" href="css/components.css" />
   <link rel="stylesheet" href="css/pages.css" />
   <link rel="stylesheet" href="css/responsive.css" />
+  <link rel="stylesheet" href="css/add-clothing.css" />
 
   <!-- Favicons -->
   <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png" />
@@ -183,107 +184,193 @@
 
   <!-- Add Clothing Modal -->
   <div class="modal-overlay" id="add-clothing-modal">
-    <div class="modal">
+    <div class="modal modal-add">
       <div class="modal-header">
         <h2>Add New Clothing</h2>
-        <button class="modal-close" id="modal-close-add" aria-label="Close">
+        <button type="button" class="modal-close" id="modal-close-add" aria-label="Close">
           <i data-lucide="x"></i>
         </button>
       </div>
-      <form id="add-clothing-form" class="modal-form">
-        <div class="form-group">
-          <label for="clothing-type">Type <span class="required">*</span></label>
-          <select id="clothing-type" required>
-            <option value="">Select type...</option>
-            <optgroup label="Tops">
-              <option value="t-shirt">T-Shirt</option>
-              <option value="shirt">Shirt</option>
-              <option value="blouse">Blouse</option>
-              <option value="top">Top</option>
-            </optgroup>
-            <optgroup label="Outerwear">
-              <option value="jacket">Jacket</option>
-              <option value="sweater">Sweater</option>
-              <option value="hoodie">Hoodie</option>
-            </optgroup>
-            <optgroup label="Bottoms">
-              <option value="pants">Pants</option>
-              <option value="jeans">Jeans</option>
-              <option value="shorts">Shorts</option>
-              <option value="skirt">Skirt</option>
-              <option value="trousers">Trousers</option>
-            </optgroup>
-            <optgroup label="Footwear">
-              <option value="shoes">Shoes</option>
-              <option value="sneakers">Sneakers</option>
-              <option value="boots">Boots</option>
-              <option value="sandals">Sandals</option>
-              <option value="loafers">Loafers</option>
-            </optgroup>
-          </select>
-          <span class="form-error" id="error-type"></span>
-        </div>
+      <form id="add-clothing-form" class="modal-form" data-stage="upload" novalidate>
+        <input type="file" id="clothing-image-file" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" hidden />
 
-        <div class="form-group">
-          <label for="clothing-color">Color <span class="required">*</span></label>
-          <select id="clothing-color" required>
-            <option value="">Select color...</option>
-            <option value="white">White</option>
-            <option value="black">Black</option>
-            <option value="blue">Blue</option>
-            <option value="red">Red</option>
-            <option value="green">Green</option>
-            <option value="navy">Navy</option>
-            <option value="gray">Gray</option>
-            <option value="brown">Brown</option>
-            <option value="beige">Beige</option>
-            <option value="pink">Pink</option>
-            <option value="yellow">Yellow</option>
-            <option value="orange">Orange</option>
-            <option value="purple">Purple</option>
-          </select>
-          <span class="form-error" id="error-color"></span>
-        </div>
-
-        <div class="form-group">
-          <label for="clothing-pattern">Pattern</label>
-          <input type="text" id="clothing-pattern" placeholder="e.g. solid, plaid, striped..." />
-        </div>
-
-        <div class="form-group">
-          <label>Add a Picture</label>
-          <input type="file" id="clothing-image-file" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" hidden />
-          <div id="clothing-image-upload-area" class="clothing-image-upload-area" role="button" tabindex="0" aria-controls="clothing-image-file">
+        <!-- Step 1: only Upload Image (Close is the header button) -->
+        <div class="add-stage" id="add-stage-upload">
+          <button type="button" id="clothing-image-upload-area" class="clothing-image-upload-area" aria-controls="clothing-image-file">
             <i data-lucide="upload-cloud"></i>
-            <span>Click to upload an image</span>
+            <span class="clothing-image-upload-label">Upload Image</span>
             <small>JPG, PNG, or WEBP · Max 10 MB</small>
-          </div>
-          <div id="clothing-image-preview-wrap" class="clothing-image-preview-wrap" hidden>
-            <img id="clothing-image-preview" alt="Selected clothing preview" />
-            <div class="clothing-image-preview-actions">
-              <button type="button" class="btn btn-secondary btn-sm" onclick="document.getElementById('clothing-image-file').click()">Replace</button>
-              <button type="button" class="btn btn-outline btn-sm" id="btn-remove-clothing-image">Remove</button>
-            </div>
+          </button>
+          <div class="add-busy" id="clothing-image-preparing" role="status" hidden>
+            <i data-lucide="loader-2" class="animate-spin"></i> Preparing image…
           </div>
           <span class="form-error" id="clothing-image-error" role="alert"></span>
         </div>
 
-        <div class="form-group">
-          <label for="clothing-image">Image URL (optional)</label>
-          <input type="url" id="clothing-image" placeholder="https://example.com/image.jpg" />
-        </div>
+        <!-- Step 2: image + AI-detected values + user-entered details -->
+        <div class="add-stage" id="add-stage-details" hidden>
+          <div id="clothing-image-preview-wrap" class="add-image-panel">
+            <div class="add-image-cards" id="add-image-cards">
+              <label class="add-image-option is-selected" id="add-option-original" data-key="original">
+                <input type="checkbox" class="add-image-select" value="original" checked />
+                <img id="clothing-image-preview" alt="Original photo" />
+                <span class="add-image-caption">Whole photo (original)</span>
+              </label>
+              <!-- one card per extracted garment is added here by Beautify -->
+              <div class="add-image-option add-image-working" id="beautify-progress" role="status" hidden>
+                <i data-lucide="loader-2" class="animate-spin"></i>
+                <span id="beautify-progress-text">Extracting garments…</span>
+              </div>
+            </div>
+            <div class="clothing-image-preview-actions add-image-actions">
+              <button type="button" class="btn btn-primary btn-sm" id="btn-beautify" title="Cut out each garment as its own product image">
+                <i data-lucide="sparkles"></i> Beautify
+              </button>
+              <button type="button" class="btn btn-secondary btn-sm" id="btn-revert-original" hidden>Revert to Original</button>
+              <button type="button" class="btn btn-outline btn-sm" id="btn-regenerate-beautify" hidden>Regenerate</button>
+              <button type="button" class="btn btn-secondary btn-sm" id="btn-replace-clothing-image">Replace</button>
+              <button type="button" class="btn btn-outline btn-sm" id="btn-remove-clothing-image">Remove</button>
+            </div>
+            <p class="add-image-note" id="beautify-note" role="status"></p>
+          </div>
 
-        <div class="form-group">
-          <label for="clothing-price">Price (₹)</label>
-          <input type="number" id="clothing-price" placeholder="0.00" step="0.01" min="0" />
-        </div>
+          <div class="add-item-tabs" id="add-item-tabs" role="tablist" aria-label="Items to add" hidden></div>
 
-        <div class="form-actions">
-          <button type="button" class="btn btn-secondary" id="btn-cancel-add">Cancel</button>
-          <button type="submit" class="btn btn-primary" id="btn-submit-add">
-            <i data-lucide="plus"></i>
-            Add to Wardrobe
-          </button>
+          <div class="add-analysis" id="ai-analysis-status" role="status" data-state="idle"></div>
+
+          <div class="form-row-2">
+            <div class="form-group">
+              <label for="clothing-type">Type <span class="required">*</span> <span class="ai-badge" id="ai-badge-type" hidden>AI</span></label>
+              <select id="clothing-type" data-ai-field="category">
+                <option value="">Select type...</option>
+                <optgroup label="Tops">
+                  <option value="t-shirt">T-Shirt</option>
+                  <option value="shirt">Shirt</option>
+                  <option value="blouse">Blouse</option>
+                  <option value="top">Top</option>
+                </optgroup>
+                <optgroup label="Outerwear">
+                  <option value="jacket">Jacket</option>
+                  <option value="sweater">Sweater</option>
+                  <option value="hoodie">Hoodie</option>
+                </optgroup>
+                <optgroup label="Bottoms">
+                  <option value="pants">Pants</option>
+                  <option value="jeans">Jeans</option>
+                  <option value="shorts">Shorts</option>
+                  <option value="skirt">Skirt</option>
+                  <option value="trousers">Trousers</option>
+                </optgroup>
+                <optgroup label="Footwear">
+                  <option value="shoes">Shoes</option>
+                  <option value="sneakers">Sneakers</option>
+                  <option value="boots">Boots</option>
+                  <option value="sandals">Sandals</option>
+                  <option value="loafers">Loafers</option>
+                </optgroup>
+              </select>
+              <span class="form-error" id="error-type"></span>
+            </div>
+
+            <div class="form-group">
+              <label for="clothing-color">Color <span class="required">*</span> <span class="ai-badge" id="ai-badge-color" hidden>AI</span></label>
+              <select id="clothing-color" data-ai-field="color">
+                <option value="">Select color...</option>
+                <option value="white">White</option>
+                <option value="black">Black</option>
+                <option value="blue">Blue</option>
+                <option value="red">Red</option>
+                <option value="green">Green</option>
+                <option value="navy">Navy</option>
+                <option value="gray">Gray</option>
+                <option value="brown">Brown</option>
+                <option value="beige">Beige</option>
+                <option value="pink">Pink</option>
+                <option value="yellow">Yellow</option>
+                <option value="orange">Orange</option>
+                <option value="purple">Purple</option>
+              </select>
+              <span class="form-error" id="error-color"></span>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="clothing-pattern">Pattern <span class="ai-badge" id="ai-badge-pattern" hidden>AI</span></label>
+            <input type="text" id="clothing-pattern" data-ai-field="pattern" list="clothing-pattern-options" placeholder="e.g. solid, plaid, striped..." />
+            <datalist id="clothing-pattern-options">
+              <option value="solid"></option>
+              <option value="striped"></option>
+              <option value="checked"></option>
+              <option value="graphic"></option>
+              <option value="floral"></option>
+              <option value="polka-dot"></option>
+            </datalist>
+          </div>
+
+          <fieldset class="form-group form-fieldset">
+            <legend>Season <span class="required">*</span> <small>(select all that apply)</small></legend>
+            <div class="chip-options" id="clothing-season">
+              <label class="chip-option"><input type="checkbox" name="clothing-season" value="spring" /> <span>Spring</span></label>
+              <label class="chip-option"><input type="checkbox" name="clothing-season" value="summer" /> <span>Summer</span></label>
+              <label class="chip-option"><input type="checkbox" name="clothing-season" value="fall" /> <span>Fall</span></label>
+              <label class="chip-option"><input type="checkbox" name="clothing-season" value="winter" /> <span>Winter</span></label>
+            </div>
+            <span class="form-error" id="error-season"></span>
+          </fieldset>
+
+          <div class="form-row-2">
+            <div class="form-group">
+              <label for="clothing-occasion">Occasion <span class="required">*</span></label>
+              <select id="clothing-occasion">
+                <option value="">Select occasion...</option>
+                <option value="daily">Daily / Casual</option>
+                <option value="work">Work</option>
+                <option value="formal">Formal</option>
+                <option value="party">Party</option>
+                <option value="sports">Sports / Gym</option>
+                <option value="travel">Travel</option>
+              </select>
+              <span class="form-error" id="error-occasion"></span>
+            </div>
+
+            <div class="form-group">
+              <label for="clothing-rating">Rating</label>
+              <select id="clothing-rating">
+                <option value="">Not rated</option>
+                <option value="5">★★★★★ (5)</option>
+                <option value="4">★★★★☆ (4)</option>
+                <option value="3">★★★☆☆ (3)</option>
+                <option value="2">★★☆☆☆ (2)</option>
+                <option value="1">★☆☆☆☆ (1)</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-row-2">
+            <div class="form-group">
+              <label for="clothing-brand">Brand</label>
+              <input type="text" id="clothing-brand" maxlength="100" placeholder="e.g. Uniqlo" />
+            </div>
+
+            <div class="form-group">
+              <label for="clothing-price">Price (₹)</label>
+              <input type="number" id="clothing-price" placeholder="0.00" step="0.01" min="0" />
+              <span class="form-error" id="error-price"></span>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="clothing-image">Image URL (optional)</label>
+            <input type="url" id="clothing-image" placeholder="https://example.com/image.jpg" />
+          </div>
+
+          <div class="form-actions">
+            <button type="button" class="btn btn-secondary" id="btn-cancel-add">Cancel</button>
+            <button type="submit" class="btn btn-primary" id="btn-submit-add">
+              <i data-lucide="plus"></i>
+              Add to Wardrobe
+            </button>
+          </div>
         </div>
       </form>
     </div>
@@ -313,6 +400,7 @@
   <script src="js/utils.js"></script>
   <script src="js/toast.js"></script>
   <script src="js/pages/analytics.js"></script>
+  <script src="js/clothing-beautify.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>

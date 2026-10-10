@@ -144,6 +144,22 @@ const Utils = {
         <span class="detail-field-label">Pattern</span>
         <span class="detail-field-value">${this.escapeHTML(item.pattern || '—')}</span>
       </div>
+      ${item.season ? `<div class="detail-field">
+        <span class="detail-field-label">Season</span>
+        <span class="detail-field-value">${this.escapeHTML(String(item.season).split(',').map(s => this.capitalize(s.trim())).join(', '))}</span>
+      </div>` : ''}
+      ${item.occasion ? `<div class="detail-field">
+        <span class="detail-field-label">Occasion</span>
+        <span class="detail-field-value">${this.escapeHTML(this.capitalize(item.occasion))}</span>
+      </div>` : ''}
+      ${item.brand ? `<div class="detail-field">
+        <span class="detail-field-label">Brand</span>
+        <span class="detail-field-value">${this.escapeHTML(item.brand)}</span>
+      </div>` : ''}
+      ${Number(item.rating) > 0 ? `<div class="detail-field">
+        <span class="detail-field-label">Rating</span>
+        <span class="detail-field-value">${Number(item.rating)} / 5</span>
+      </div>` : ''}
       <div class="detail-field">
         <span class="detail-field-label">Price</span>
         <span class="detail-field-value">${this.formatPrice(item.price)}</span>

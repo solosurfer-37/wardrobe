@@ -37,6 +37,20 @@ const CONFIG = {
     purple: '#8B6BAE',
   },
 
+  // Add to Wardrobe → Beautify: one product image per garment (garment segmentation, not
+  // just background removal). Garment pixels are always copied unchanged from the photo.
+  BEAUTIFY: {
+    // 'auto': SAM 3 via the backend (needs ROBOFLOW_API_KEY there), else the on-device model.
+    // 'sam3': SAM 3 only. 'local': on-device model only (no server call).
+    ENGINE: 'auto',
+    LIBRARY_URL: 'https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.8.1/dist/transformers.min.js',
+    MODEL_ID: 'Xenova/segformer_b0_clothes',
+    DTYPE: 'fp32',        // full precision (~15 MB); 'q8' is smaller but gives blotchier masks
+    REFINE: true,         // second, finer pass on a crop around the person
+    WORKING_SIZE: 1280,   // longest side used for segmentation
+    OUTPUT_SIZE: 1024,    // longest side of the beautified square image
+  },
+
   // Default location (New Delhi, as per backend defaults)
   DEFAULT_LATITUDE: 28.6139,
   DEFAULT_LONGITUDE: 77.2090,
@@ -48,3 +62,4 @@ Object.freeze(CONFIG.CATEGORIES);
 Object.freeze(CONFIG.ALL_TYPES);
 Object.freeze(CONFIG.COLORS);
 Object.freeze(CONFIG.COLOR_MAP);
+Object.freeze(CONFIG.BEAUTIFY);

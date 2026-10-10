@@ -49,6 +49,12 @@ const DB = {
     if (i.wearCount !== undefined) row.wear_count = i.wearCount;
     if (i.lastWornDate !== undefined) row.last_worn_date = i.lastWornDate;
     if (i.name !== undefined) row.name = i.name;
+    // Details entered in the Add to Wardrobe form (existing columns)
+    if (i.brand !== undefined) row.brand = i.brand;
+    if (i.season !== undefined) row.season = i.season;
+    if (i.occasion !== undefined) row.occasion = i.occasion;
+    if (i.rating !== undefined) row.rating = i.rating;
+    if (i.originalImagePath !== undefined) row.original_image_path = i.originalImagePath;
     return row;
   },
 };
@@ -120,26 +126,43 @@ const API = {
    * Item add karta hai. File di ho to:
    *   1) pehle image upload (fail hui -> item save hi nahi hoga)
    *   2) fir insert (fail hua -> uploaded image delete / rollback)
+   * Optional `originalFile`: the untouched photo, stored next to the final image (e.g. when the
+   * final image is a garment extracted by Beautify) and saved as original_image_path.
    * Bucket "clothes" (public) chahiye.
    */
-  async addClothingItem(item, file = null) {
+  async addClothingItem(item, file = null, originalFile = null) {
     const uid = await DB.userId();
-    let path = null;
+    const uploaded = [];
     let imageUrl = item.imageUrl || '';
+    let originalImagePath;
+    const stamp = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const extOf = (f) => (f.name.split('.').pop() || 'jpg').toLowerCase();
 
-    if (file) {
-      const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
-      path = `${uid}/${Date.now()}.${ext}`;
-      const { error: upErr } = await sb.storage.from('clothes').upload(path, file);
-      if (upErr) throw new Error('Image upload failed: ' + upErr.message);
-      imageUrl = sb.storage.from('clothes').getPublicUrl(path).data.publicUrl;
+    try {
+      if (file) {
+        const path = `${uid}/${stamp}.${extOf(file)}`;
+        const { error: upErr } = await sb.storage.from('clothes').upload(path, file);
+        if (upErr) throw new Error('Image upload failed: ' + upErr.message);
+        uploaded.push(path);
+        imageUrl = sb.storage.from('clothes').getPublicUrl(path).data.publicUrl;
+      }
+      if (originalFile) {
+        const path = `${uid}/${stamp}-original.${extOf(originalFile)}`;
+        const { error: upErr } = await sb.storage.from('clothes').upload(path, originalFile);
+        if (upErr) throw new Error('Original photo upload failed: ' + upErr.message);
+        uploaded.push(path);
+        originalImagePath = path;
+      }
+    } catch (err) {
+      if (uploaded.length) await sb.storage.from('clothes').remove(uploaded); // rollback
+      throw err;
     }
 
-    const row = { ...DB.toRow({ ...item, imageUrl }), user_id: uid, wear_count: item.wearCount || 0 };
+    const row = { ...DB.toRow({ ...item, imageUrl, originalImagePath }), user_id: uid, wear_count: item.wearCount || 0 };
     const { data, error } = await sb.from('clothing_items').insert(row).select().single();
 
     if (error) {
-      if (path) await sb.storage.from('clothes').remove([path]); // rollback
+      if (uploaded.length) await sb.storage.from('clothes').remove(uploaded); // rollback
       throw new Error(error.message);
     }
     return DB.toItem(data);
@@ -186,6 +209,54 @@ const API = {
   async getLeastWornItems() {
     const items = await this.getAllClothes();
     return items.sort((a, b) => a.wearCount - b.wearCount);
+  },
+
+  // ═══════ AI (Spring backend: keys stay on the server) ═══════
+
+  /** POSTs an image to the backend; errors carry `status` and `unavailable` (not configured / not running). */
+  async _postImage(path, file, timeoutMs) {
+    const baseUrl = localStorage.getItem('wardrobe_api_url') || CONFIG.API_BASE_URL;
+    const formData = new FormData();
+    formData.append('file', file);
+    const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    const timer = controller ? setTimeout(() => controller.abort(), timeoutMs) : null;
+    let response;
+    try {
+      response = await fetch(`${baseUrl}${path}`, { method: 'POST', body: formData, signal: controller ? controller.signal : undefined });
+    } catch (error) {
+      const err = new Error(error && error.name === 'AbortError' ? 'The AI service took too long.' : 'Backend not reachable at ' + baseUrl + '.');
+      err.isNetworkError = true;
+      err.unavailable = true;
+      throw err;
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
+    if (!response.ok) {
+      let body = {};
+      try { body = await response.json(); } catch (_) {}
+      const err = new Error(body.error || body.message || `AI request failed (${response.status})`);
+      err.status = response.status;
+      // 503: key not configured on the server; 404/405: backend predates this endpoint.
+      err.unavailable = [503, 404, 405].includes(response.status);
+      throw err;
+    }
+    return response.json();
+  },
+
+  /**
+   * POST /api/vision/analyze-image — AI recognition (Gemini) of category, primary colour and pattern,
+   * for the main garment and per garment group. Unsure values come back as null.
+   */
+  async analyzeClothingImage(file) {
+    return this._postImage('/api/vision/analyze-image', file, 30000);
+  },
+
+  /**
+   * POST /api/vision/segment-garments — individual garment outlines from SAM 3 (Roboflow).
+   * Resolves to { engine: 'sam3', garments: [{ prompt, type, confidence, polygons }] }.
+   */
+  async segmentGarments(file) {
+    return this._postImage('/api/vision/segment-garments', file, 60000);
   },
 
   // ═══════ Outfits ═══════

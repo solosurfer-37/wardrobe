@@ -5,12 +5,15 @@ import com.smartwardrobe.services.ClothingItemService;
 import com.smartwardrobe.services.SupabaseStorageService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 import java.io.IOException;
+import java.net.URI;
 import java.util.Map;
 
 /**
@@ -110,8 +113,11 @@ public class ImageUploadController {
             patch.setColor(item.getColor());         // required non-null field
             patch.setWearCount(item.getWearCount()); // preserve existing value
             patch.setImagePath(storedProcessedPath);
-            // Also set imageUrl so the existing frontend card renderer can display it:
-            patch.setImageUrl(buildPublicOrSignedUrl(storedProcessedPath));
+            // Also set imageUrl so the existing frontend card renderer can display it.
+            // It points at GET /api/clothes/{id}/image, which signs a fresh URL on every view,
+            // so the card keeps working after a one-hour signed URL would have expired.
+            // ?v= changes with every upload so a retried upload is never shown from cache.
+            patch.setImageUrl(buildStableImageUrl(id));
             if (storedOriginalPath != null) {
                 patch.setOriginalImagePath(storedOriginalPath);
             }
@@ -201,7 +207,48 @@ public class ImageUploadController {
         }
     }
 
+    /**
+     * GET /api/clothes/{id}/image
+     *
+     * Redirects to a freshly signed Supabase Storage URL for the item's stored image
+     * (ClothingItem.imagePath). The bucket stays private and the service-role key never
+     * leaves the backend.
+     */
+    @GetMapping("/{id}/image")
+    public ResponseEntity<?> viewImage(@PathVariable Long id) {
+        ClothingItem item = clothingItemService.getClothingItemById(id);
+        if (item == null || item.getImagePath() == null || item.getImagePath().isBlank()) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Map.of("error", "No stored image for this clothing item"));
+        }
+        String signed;
+        try {
+            signed = storageService.getSignedUrl(item.getImagePath(), SIGNED_URL_SECONDS);
+        } catch (IllegalStateException e) {
+            return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(Map.of("error", e.getMessage()));
+        }
+        if (signed == null) {
+            return ResponseEntity.status(HttpStatus.BAD_GATEWAY)
+                    .body(Map.of("error", "Could not sign the image URL in Supabase Storage"));
+        }
+        return ResponseEntity.status(HttpStatus.FOUND)
+                .location(URI.create(signed))
+                // Let the browser reuse the redirect for a while, but never past the signature's expiry.
+                .header(HttpHeaders.CACHE_CONTROL, "private, max-age=" + (SIGNED_URL_SECONDS - 300))
+                .build();
+    }
+
     // ── Helpers ──────────────────────────────────────────────────────────────
+
+    private static final int SIGNED_URL_SECONDS = 3600;
+
+    private String buildStableImageUrl(Long id) {
+        return ServletUriComponentsBuilder.fromCurrentContextPath()
+                .path("/api/clothes/{id}/image")
+                .queryParam("v", System.currentTimeMillis())
+                .buildAndExpand(id)
+                .toUriString();
+    }
 
     private String getExtension(String contentType) {
         if (contentType == null) return "jpg";
@@ -213,13 +260,4 @@ public class ImageUploadController {
         };
     }
 
-    /**
-     * Build a displayable URL from the stored object path.
-     * Generates a 1-hour signed URL for private bucket access.
-     * Replace with a long-lived CDN URL if the bucket is made public.
-     */
-    private String buildPublicOrSignedUrl(String objectPath) {
-        String signed = storageService.getSignedUrl(objectPath, 3600);
-        return signed != null ? signed : objectPath;
-    }
 }

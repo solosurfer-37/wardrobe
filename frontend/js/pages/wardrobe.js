@@ -91,6 +91,7 @@ const WardrobePage = {
     if (addBtn && !addBtn._hasHandler) {
       addBtn._hasHandler = true;
       addBtn.addEventListener('click', () => {
+        if (typeof App !== 'undefined' && typeof App.openAddClothing === 'function') { App.openAddClothing(); return; }
         const modal = document.getElementById('add-clothing-modal');
         if (modal) modal.classList.add('active');
       });

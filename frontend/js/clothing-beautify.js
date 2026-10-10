@@ -286,6 +286,58 @@
   }
 
   /**
+   * Reference shades for the app's colour names (several per name, since "gray" or "blue" span a
+   * range). Measured colours are matched in Lab space, which follows human perception.
+   */
+  const COLOUR_REFS = {
+    white: [[245, 245, 242], [225, 225, 220]], black: [[20, 20, 22], [45, 45, 48]],
+    gray: [[128, 128, 128], [175, 175, 175], [85, 87, 90], [95, 100, 92]],
+    navy: [[28, 38, 75], [40, 50, 95]], blue: [[55, 105, 185], [100, 150, 210], [70, 110, 170]],
+    red: [[190, 35, 40], [150, 30, 35]], green: [[55, 110, 60], [30, 70, 45], [110, 140, 80]],
+    brown: [[110, 72, 45], [140, 95, 60]], beige: [[215, 195, 160], [195, 175, 140]],
+    pink: [[230, 150, 170], [240, 190, 200]], yellow: [[230, 200, 60], [240, 220, 120]],
+    orange: [[230, 130, 40], [210, 100, 40]], purple: [[115, 70, 150], [150, 110, 180]],
+  };
+
+  function toLab([r, g, b]) {
+    const lin = (c) => { c /= 255; return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4); };
+    const R = lin(r), G = lin(g), B = lin(b);
+    const x = (R * 0.4124 + G * 0.3576 + B * 0.1805) / 0.95047;
+    const y = R * 0.2126 + G * 0.7152 + B * 0.0722;
+    const z = (R * 0.0193 + G * 0.1192 + B * 0.9505) / 1.08883;
+    const f = (t) => (t > 0.008856 ? Math.cbrt(t) : 7.787 * t + 16 / 116);
+    return [116 * f(y) - 16, 500 * (f(x) - f(y)), 200 * (f(y) - f(z))];
+  }
+  const REF_LAB = Object.entries(COLOUR_REFS).flatMap(([name, shades]) => shades.map(c => [name, toLab(c)]));
+
+  function nearestColourName(rgb) {
+    const [L, A, B] = toLab(rgb);
+    let best = null, bestD = Infinity;
+    for (const [name, [l, a, b]] of REF_LAB) {
+      const d = (L - l) ** 2 + (A - a) ** 2 + (B - b) ** 2;
+      if (d < bestD) { bestD = d; best = name; }
+    }
+    return best;
+  }
+
+  /**
+   * Dominant colour of a garment, measured from its own pixels (RGBA, only opaque pixels count):
+   * every sampled pixel votes for its nearest colour name. Returns { color, share } or null.
+   */
+  function measureColour(rgba, step = 3) {
+    const votes = {};
+    let total = 0;
+    for (let i = 0; i < rgba.length; i += 4 * step) {
+      if (rgba[i + 3] < 200) continue;
+      const name = nearestColourName([rgba[i], rgba[i + 1], rgba[i + 2]]);
+      votes[name] = (votes[name] || 0) + 1; total++;
+    }
+    if (total < 50) return null;
+    const [color, n] = Object.entries(votes).sort((a, b) => b[1] - a[1])[0];
+    return { color, share: n / total };
+  }
+
+  /**
    * Square product canvas: garment centred with padding, never upscaled past 1:1
    * and never larger than maxSize.
    */
@@ -455,6 +507,7 @@
     const cut = document.createElement('canvas');
     cut.width = bw; cut.height = bh;
     cut.getContext('2d').putImageData(pixels, 0, 0);
+    const measured = measureColour(pixels.data);   // colour from the garment's own pixels
 
     const layout = productLayout({ w: bw, h: bh }, outputSize, 0.08);
     const out = document.createElement('canvas');
@@ -473,7 +526,8 @@
     const blob = await new Promise((resolve) => out.toBlob(resolve, 'image/png'));
     if (!blob) throw new BeautifyError('The browser could not create the extracted image.');
     const file = new File([blob], `${baseName}-${entry.group}.png`, { type: 'image/png' });
-    return { blob, file };
+    // Only trust a clear majority (a striped shirt has no single dominant colour).
+    return { blob, file, measuredColor: measured && measured.share >= 0.4 ? measured.color : null };
   }
 
   /** On-device engine: SegFormer clothing segmentation run in the browser. */
@@ -653,7 +707,7 @@
   }
 
   const api = {
-    extractGarments, BeautifyError, groupDetections, rasterisePolygons,
+    extractGarments, BeautifyError, groupDetections, rasterisePolygons, measureColour, nearestColourName,
     assessGarments, mainComponentShare, keepMainPieces, fillHoles, morphOpen, connectedComponents, maskBBox, mergeMasks, featherMask, productLayout,
     TYPE_TO_GROUP, GARMENT_GROUPS, GROUP_ORDER,
   };

@@ -6,6 +6,21 @@ const OutfitsPage = {
   latitude: CONFIG.DEFAULT_LATITUDE,
   longitude: CONFIG.DEFAULT_LONGITUDE,
   recommendations: null,
+  result: null,        // last engine response (weather, event, season, engine)
+  calendar: null,      // today's calendar events (if a calendar is connected)
+
+  EVENTS: [
+    { value: 'auto', label: 'Auto (calendar)' },
+    { value: 'casual', label: 'Casual' },
+    { value: 'college', label: 'College' },
+    { value: 'work', label: 'Work' },
+    { value: 'party', label: 'Party' },
+    { value: 'formal', label: 'Formal' },
+  ],
+
+  selectedEvent() {
+    return localStorage.getItem('wardrobe_event') || 'auto';
+  },
 
   init() {
     const savedLat = parseFloat(localStorage.getItem('wardrobe_lat'));
@@ -20,12 +35,102 @@ const OutfitsPage = {
     if (container && !document.getElementById('outfit-results-container')) {
       container.innerHTML = `
         <div class="outfits-page animate-fade-in">
+          <div id="outfit-context-bar" class="outfit-context-bar"></div>
           <div class="outfit-results" id="outfit-results-container"></div>
           <div id="outfit-weather-bar" class="outfit-weather-bar" style="display:none;"></div>
         </div>`;
     }
 
+    if (container && !document.getElementById('outfit-context-bar')) {
+      const bar = document.createElement('div');
+      bar.id = 'outfit-context-bar';
+      bar.className = 'outfit-context-bar';
+      const results = document.getElementById('outfit-results-container');
+      if (results) results.parentNode.insertBefore(bar, results);
+    }
+
     this.generateRecommendations();
+  },
+
+  // ── Dress code + calendar ───────────────────────────────────────────
+  renderContextBar() {
+    const bar = document.getElementById('outfit-context-bar');
+    if (!bar) return;
+    const sel = this.selectedEvent();
+    const link = API.calendarLink();
+    const cal = this.calendar;
+    let calHTML;
+    if (!link) {
+      calHTML = `
+        <button type="button" class="link-button" id="btn-connect-calendar"><i data-lucide="calendar-plus"></i> Connect your calendar</button>
+        <span class="ctx-muted">so today's events pick the dress code automatically</span>
+        <div class="ctx-connect" id="ctx-connect" hidden>
+          <input type="url" id="ctx-ics-input" placeholder="Paste your calendar's private iCal (.ics) link" />
+          <button type="button" class="btn btn-primary btn-sm" id="btn-save-calendar">Save</button>
+          <p class="ctx-help">Google Calendar: Settings → your calendar → <em>Secret address in iCal format</em>.
+            Outlook: Settings → Calendar → Shared calendars → <em>Publish</em> → ICS. The link is kept in this browser only.</p>
+        </div>`;
+    } else if (cal && cal.error) {
+      calHTML = `<span class="ctx-warn"><i data-lucide="calendar-x"></i> Calendar: ${Utils.escapeHTML(cal.error)}</span>
+        <button type="button" class="link-button" id="btn-disconnect-calendar">Disconnect</button>`;
+    } else if (cal && cal.events) {
+      const list = cal.events.length
+        ? cal.events.slice(0, 3).map(e => `${Utils.escapeHTML(e.summary)}${e.allDay ? '' : ` <span class="ctx-muted">${e.start}</span>`}`).join(' · ')
+        : 'No events today';
+      calHTML = `<span><i data-lucide="calendar-check"></i> Today: ${list}</span>
+        <button type="button" class="link-button" id="btn-disconnect-calendar">Disconnect</button>`;
+    } else {
+      calHTML = `<span class="ctx-muted"><i data-lucide="loader-2" class="animate-spin"></i> Reading your calendar…</span>`;
+    }
+
+    bar.innerHTML = `
+      <div class="ctx-row">
+        <span class="ctx-label">Dress code</span>
+        <div class="ctx-chips" role="radiogroup" aria-label="Dress code">
+          ${this.EVENTS.map(e => `<button type="button" class="ctx-chip${e.value === sel ? ' is-active' : ''}" data-event="${e.value}" role="radio" aria-checked="${e.value === sel}">${e.label}</button>`).join('')}
+        </div>
+      </div>
+      <div class="ctx-row ctx-calendar">${calHTML}</div>`;
+
+    bar.querySelectorAll('.ctx-chip').forEach(btn => btn.addEventListener('click', () => {
+      localStorage.setItem('wardrobe_event', btn.dataset.event);
+      this.generateRecommendations();
+    }));
+    const connect = document.getElementById('btn-connect-calendar');
+    if (connect) connect.addEventListener('click', () => { document.getElementById('ctx-connect').hidden = false; document.getElementById('ctx-ics-input').focus(); });
+    const save = document.getElementById('btn-save-calendar');
+    if (save) save.addEventListener('click', () => {
+      const v = document.getElementById('ctx-ics-input').value.trim();
+      if (!/^(https?|webcals?):\/\//i.test(v)) { Toast.error('Calendar', 'Paste the full iCal link (starts with https:// or webcal://).'); return; }
+      API.setCalendarLink(v);
+      localStorage.setItem('wardrobe_event', 'auto');
+      Toast.success('Calendar connected', "Today's events now set the dress code.");
+      this.generateRecommendations();
+    });
+    const disconnect = document.getElementById('btn-disconnect-calendar');
+    if (disconnect) disconnect.addEventListener('click', () => {
+      API.setCalendarLink('');
+      this.calendar = null;
+      this.generateRecommendations();
+    });
+    if (window.lucide) lucide.createIcons();
+  },
+
+  /** Dress code to send to the engine: the chosen chip, or today's calendar events for "Auto". */
+  async resolveEvent() {
+    const sel = this.selectedEvent();
+    if (API.calendarLink()) {
+      try {
+        this.calendar = await API.getTodayCalendar();
+      } catch (err) {
+        this.calendar = { error: err.message || 'could not be read' };
+      }
+    } else {
+      this.calendar = null;
+    }
+    if (sel !== 'auto') return sel;
+    if (this.calendar && this.calendar.title) return this.calendar.title;   // e.g. "Client meeting" → work
+    return 'casual';
   },
 
   // ₹ with Indian digit grouping (1,25,000)
@@ -50,9 +155,13 @@ const OutfitsPage = {
         <div class="skeleton outfit-skeleton-card"></div>
       </div>`;
 
+    this.renderContextBar();
     try {
-      const data = await API.getOutfitRecommendations(this.latitude, this.longitude);
-      this.recommendations = data || [];
+      const event = await this.resolveEvent();
+      this.renderContextBar();
+      const data = await API.getOutfitRecommendations(this.latitude, this.longitude, event);
+      this.result = data;
+      this.recommendations = (data && data.outfits) || [];
       this.renderResults();
       this.renderWeatherBar();
     } catch (err) {
@@ -79,8 +188,12 @@ const OutfitsPage = {
       container.innerHTML = `
         <div class="empty-state">
           <i data-lucide="hanger" class="empty-icon"></i>
+          ${this.result && this.result.itemCount >= 3 ? `
+          <h4>No Outfit Fits Today</h4>
+          <p>Every suitable combination uses something worn in the last 2 days, or doesn't suit today's weather and dress code. Try another dress code, or add more pieces.</p>
+          <p class="section-subtitle" style="margin-top:var(--space-2);">${this.describeContext()}</p>` : `
           <h4>Not Enough Items for Outfits</h4>
-          <p>The AI needs at least one top, one bottom, and one footwear item to construct valid outfits.</p>
+          <p>The AI needs at least one top, one bottom, and one footwear item to construct valid outfits.</p>`}
           <a href="wardrobe.html" class="btn btn-primary btn-sm" style="margin-top:var(--space-4);">
             <i data-lucide="plus"></i> Add Items to Wardrobe
           </a>
@@ -93,13 +206,33 @@ const OutfitsPage = {
       <div class="outfit-results-header">
         <div>
           <h3>Curated Outfits for Today</h3>
-          <p class="section-subtitle">Ranked by lowest combined wear count to rotate dormant wardrobe assets</p>
+          <p class="section-subtitle">${this.describeContext()}</p>
         </div>
-        <span class="badge badge-olive">${this.recommendations.length} Combos Created</span>
+        <span class="badge ${this.result && this.result.engine === 'smart' ? 'badge-olive' : 'badge-amber'}">
+          ${this.result && this.result.engine === 'smart' ? 'Smart engine' : 'Basic picker'} · ${this.recommendations.length} look${this.recommendations.length === 1 ? '' : 's'}
+        </span>
       </div>
       <div class="outfit-list">
         ${this.recommendations.map((outfit, i) => this.renderOutfitCard(outfit, i)).join('')}
       </div>`;
+
+    container.querySelectorAll('[data-wear-look]').forEach(btn => btn.addEventListener('click', async () => {
+      const outfit = this.recommendations[Number(btn.dataset.wearLook)];
+      const items = [outfit.top, outfit.bottom, outfit.footwear, outfit.outerwear].filter(Boolean);
+      btn.disabled = true;
+      btn.innerHTML = `<i data-lucide="loader-2" class="animate-spin"></i> Saving…`;
+      if (window.lucide) lucide.createIcons();
+      try {
+        await API.logWear(items);
+        Toast.success('Enjoy your outfit!', `Logged ${items.length} items as worn today. Tomorrow's picks will rotate in other pieces.`);
+        this.generateRecommendations();
+      } catch (err) {
+        Toast.error('Could not log wear', err.message || 'Please try again.');
+        btn.disabled = false;
+        btn.innerHTML = `<i data-lucide="check-circle"></i> Wear this look today`;
+        if (window.lucide) lucide.createIcons();
+      }
+    }));
 
     this.recommendations.forEach(outfit => {
       [outfit.top, outfit.bottom, outfit.footwear, outfit.outerwear].filter(Boolean).forEach(item => {
@@ -110,6 +243,23 @@ const OutfitsPage = {
     });
 
     if (window.lucide) lucide.createIcons();
+  },
+
+  /** One line saying what the engine took into account. */
+  describeContext() {
+    const r = this.result || {};
+    if (r.engine !== 'smart') {
+      return `Basic picker (colour rules + least-worn first) — the smart engine is offline${r.fallbackReason ? ` (${Utils.escapeHTML(r.fallbackReason.replace(/\.+$/, ''))})` : ''}. Start the backend for weather- and calendar-aware outfits.`;
+    }
+    const w = r.weather || {};
+    const parts = [];
+    if (Number.isFinite(w.feelsLike)) parts.push(`feels like ${Math.round(w.feelsLike)}°C`);
+    if (w.raining || w.rainChance >= 50) parts.push(`rain ${Math.round(w.rainChance || 0)}%`);
+    if (Number.isFinite(w.windSpeed) && w.windSpeed >= 25) parts.push(`windy ${Math.round(w.windSpeed)} km/h`);
+    const ev = r.event ? `${Utils.capitalize(r.event)} dress code` : '';
+    const cal = this.calendar && this.calendar.title && this.selectedEvent() === 'auto' ? ` from "${Utils.escapeHTML(this.calendar.title)}"` : '';
+    const season = r.season ? `${r.season}${r.seasonFiltered ? ' items' : ''}` : '';
+    return [parts.join(', '), ev + cal, season, 'least-worn pieces first'].filter(Boolean).join(' · ');
   },
 
   async renderWeatherBar() {
@@ -211,15 +361,20 @@ const OutfitsPage = {
             Total value: ${this.formatINR(totalCost)}
           </span>
           <span class="badge ${hasOuterwear ? 'badge-sky' : 'badge-amber'}">
-            <i data-lucide="${hasOuterwear ? 'cloud-snow' : 'sun'}" style="width:12px;height:12px;margin-right:4px;"></i>
-            ${hasOuterwear ? 'Layered (<15°C)' : 'Warm Climate'}
+            <i data-lucide="${hasOuterwear ? 'layers' : 'sun'}" style="width:12px;height:12px;margin-right:4px;"></i>
+            ${hasOuterwear ? 'Layered for the weather' : 'No layer needed'}
           </span>
           <span class="badge badge-neutral">
             <i data-lucide="check" style="width:12px;height:12px;margin-right:4px;"></i>
             Color Balanced
           </span>
         </div>
-        ${outfit.reason ? `<p class="section-subtitle" style="margin-top:var(--space-3);">${Utils.escapeHTML(outfit.reason)}</p>` : ''}
+        ${outfit.reason ? `<p class="outfit-reason"><i data-lucide="sparkles"></i> ${Utils.escapeHTML(outfit.reason)}</p>` : ''}
+        <div class="outfit-card-actions">
+          <button type="button" class="btn btn-primary btn-sm" data-wear-look="${index}">
+            <i data-lucide="check-circle"></i> Wear this look today
+          </button>
+        </div>
       </div>`;
   },
 

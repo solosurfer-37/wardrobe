@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="AI Wardrobe — Wardrobe utilization health, cost-per-wear metrics, and rotation statistics." />
+  <title>Analytics &amp; Insights — AI Wardrobe</title>
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+
+  <!-- Stylesheets -->
+  <link rel="stylesheet" href="css/variables.css" />
+  <link rel="stylesheet" href="css/base.css" />
+  <link rel="stylesheet" href="css/layout.css" />
+  <link rel="stylesheet" href="css/components.css" />
+  <link rel="stylesheet" href="css/pages.css" />
+  <link rel="stylesheet" href="css/responsive.css" />
+  <link rel="stylesheet" href="css/add-clothing.css" />
+
+  <!-- Favicons -->
+  <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png" />
+  <link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png" />
+  <link rel="icon" type="image/png" sizes="16x16" href="favicon-16x16.png" />
+</head>
+<body data-page="analytics">
+  <!-- Mobile Overlay -->
+  <div class="mobile-overlay" id="mobile-overlay"></div>
+
+<!-- ═══ Top Bar ═══ -->
+<header class="topbar">
+  <div class="topbar-left">
+    <a href="index.html" class="glass-logo logo">
+      <span class="glass-logo-icon logo-icon">
+        <i data-lucide="shirt" class="logo-lucide"></i>
+      </span>
+      <span class="glass-logo-text logo-text">
+        <h1>AI Wardrobe</h1>
+        <span class="logo-tagline">Smart Styling</span>
+      </span>
+    </a>
+  </div>
+
+  <div class="topbar-actions">
+    <div class="glass-user sidebar-user">
+      <div class="glass-avatar user-avatar">AW</div>
+      <div class="user-info">
+        <span class="user-name">Wardrobe User</span>
+        <span class="user-role">Personal Stylist</span>
+      </div>
+    </div>
+  </div>
+</header>
+
+<!-- ═══ Floating Add Button ═══ -->
+<button class="fab-add" id="btn-add-clothing-topbar" aria-label="Add clothing" title="Add clothing">
+  <i data-lucide="plus"></i>
+</button>
+
+<!-- ═══ Glass Nav Shell ═══ -->
+<header class="glass-shell" id="sidebar">
+  <div class="glass-bar">
+
+    <a href="index.html" class="glass-logo glass-mobile-logo">
+      <span class="glass-logo-icon"><i data-lucide="shirt"></i></span>
+      <span class="glass-logo-text"><h1>AI Wardrobe</h1><span class="logo-tagline">Smart Styling</span></span>
+    </a>
+
+    <nav class="glass-nav sidebar-nav" id="sidebar-nav">
+      <a href="index.html" class="glass-logo glass-menu-logo">
+        <span class="glass-logo-icon"><i data-lucide="shirt"></i></span>
+        <span class="glass-logo-text"><h1>AI Wardrobe</h1><span class="logo-tagline">Smart Styling</span></span>
+      </a>
+
+      <button class="glass-close sidebar-close" id="sidebar-close" aria-label="Close menu">
+        <i data-lucide="x"></i>
+      </button>
+
+      <ul class="glass-links">
+        <li><a href="index.html"     class="glass-link nav-item"        data-page="dashboard" id="nav-dashboard"><i data-lucide="layout-dashboard"></i><span>Dashboard</span></a></li>
+        <li><a href="wardrobe.html"  class="glass-link nav-item"        data-page="wardrobe"  id="nav-wardrobe"><i data-lucide="shirt"></i><span>My Wardrobe</span></a></li>
+        <li><a href="outfits.html"   class="glass-link nav-item"        data-page="outfits"   id="nav-outfits"><i data-lucide="sparkles"></i><span>Outfit Generator</span></a></li>
+        <li><a href="analytics.html" class="glass-link nav-item active" data-page="analytics" id="nav-analytics"><i data-lucide="bar-chart-3"></i><span>Analytics</span></a></li>
+        
+      </ul>
+    </nav>
+
+    <button class="glass-burger" id="sidebar-toggle" aria-label="Open menu" aria-expanded="false">
+      <span></span><span></span><span></span>
+    </button>
+
+  </div>
+</header>
+
+  <!-- Main Content -->
+  <main class="main-content" id="main-content">
+
+    <!-- Page Container -->
+    <div class="page-container" id="page-container">
+      <div class="analytics-page animate-fade-in">
+        <div class="section-header" style="margin-bottom: var(--space-6);">
+          <div>
+            <h2 class="section-title">Wardrobe Analytics</h2>
+            <p class="section-subtitle">Utilization health, cost-per-wear return, and wardrobe rotation statistics</p>
+          </div>
+        </div>
+
+        <!-- Top Stat Cards -->
+        <div class="analytics-stats" id="analytics-stats-grid">
+          <div class="skeleton skeleton-card"></div>
+          <div class="skeleton skeleton-card"></div>
+          <div class="skeleton skeleton-card"></div>
+          <div class="skeleton skeleton-card"></div>
+        </div>
+
+        <!-- Main Chart & Meter Sections -->
+        <div class="analytics-sections">
+          <!-- Circular Utilization Meter -->
+          <div class="card analytics-card">
+            <div class="section-header">
+              <div>
+                <h3 class="section-title">Utilization Score</h3>
+                <p class="section-subtitle">Percentage of wardrobe active in the last 30 days</p>
+              </div>
+            </div>
+            <div class="utilization-meter" id="analytics-utilization-meter">
+              <div class="skeleton" style="width: 160px; height: 160px; border-radius: 50%; margin: 0 auto;"></div>
+            </div>
+          </div>
+
+          <!-- Category Breakdown Bar Chart -->
+          <div class="card analytics-card">
+            <div class="section-header">
+              <div>
+                <h3 class="section-title">Category Distribution</h3>
+                <p class="section-subtitle">Balance of tops, bottoms, outerwear, &amp; footwear</p>
+              </div>
+            </div>
+            <div id="analytics-category-chart">
+              <div class="skeleton" style="height: 200px; border-radius: var(--radius-md);"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Secondary Sections: Most Worn vs Least Worn -->
+        <div class="analytics-sections">
+          <div class="card analytics-card">
+            <div class="section-header">
+              <div>
+                <h3 class="section-title">Most Worn Staples</h3>
+                <p class="section-subtitle">Your highest rotation essentials</p>
+              </div>
+              <span class="badge badge-olive">High Value</span>
+            </div>
+            <div id="analytics-most-worn-list">
+              <div class="skeleton" style="height: 160px; border-radius: var(--radius-md);"></div>
+            </div>
+          </div>
+
+          <div class="card analytics-card">
+            <div class="section-header">
+              <div>
+                <h3 class="section-title">Neglected Assets</h3>
+                <p class="section-subtitle">Pieces eligible for styling revival or resale</p>
+              </div>
+              <span class="badge badge-rose">Opportunity</span>
+            </div>
+            <div id="analytics-least-worn-list">
+              <div class="skeleton" style="height: 160px; border-radius: var(--radius-md);"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- Toast Container -->
+  <div class="toast-container" id="toast-container"></div>
+
+  <!-- Add Clothing Modal -->
+  <div class="modal-overlay" id="add-clothing-modal">
+    <div class="modal modal-add">
+      <div class="modal-header">
+        <h2>Add New Clothing</h2>
+        <button type="button" class="modal-close" id="modal-close-add" aria-label="Close">
+          <i data-lucide="x"></i>
+        </button>
+      </div>
+      <form id="add-clothing-form" class="modal-form" data-stage="upload" novalidate>
+        <input type="file" id="clothing-image-file" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" hidden />
+
+        <!-- Step 1: only Upload Image (Close is the header button) -->
+        <div class="add-stage" id="add-stage-upload">
+          <button type="button" id="clothing-image-upload-area" class="clothing-image-upload-area" aria-controls="clothing-image-file">
+            <i data-lucide="upload-cloud"></i>
+            <span class="clothing-image-upload-label">Upload Image</span>
+            <small>JPG, PNG, or WEBP · Max 10 MB</small>
+          </button>
+          <div class="add-or"><span>or</span></div>
+          <button type="button" id="btn-scan-receipt" class="add-receipt-start">
+            <i data-lucide="receipt"></i>
+            <span><strong>Scan a receipt</strong><small>Add the items you bought — the AI reads names, prices and brand</small></span>
+          </button>
+          <div class="add-busy" id="clothing-image-preparing" role="status" hidden>
+            <i data-lucide="loader-2" class="animate-spin"></i> Preparing image…
+          </div>
+          <span class="form-error" id="clothing-image-error" role="alert"></span>
+        </div>
+
+        <!-- Step 2: image + AI-detected values + user-entered details -->
+        <div class="add-stage" id="add-stage-details" hidden>
+          <div id="clothing-image-preview-wrap" class="add-image-panel">
+            <div class="add-image-cards" id="add-image-cards">
+              <label class="add-image-option is-selected" id="add-option-original" data-key="original">
+                <input type="checkbox" class="add-image-select" value="original" checked />
+                <img id="clothing-image-preview" alt="Original photo" />
+                <span class="add-image-caption">Whole photo (original)</span>
+              </label>
+              <!-- one card per extracted garment is added here by Beautify -->
+              <div class="add-image-option add-image-working" id="beautify-progress" role="status" hidden>
+                <i data-lucide="loader-2" class="animate-spin"></i>
+                <span id="beautify-progress-text">Extracting garments…</span>
+              </div>
+            </div>
+            <div class="clothing-image-preview-actions add-image-actions">
+              <button type="button" class="btn btn-primary btn-sm" id="btn-beautify" title="Cut out each garment as its own product image">
+                <i data-lucide="sparkles"></i> Beautify
+              </button>
+              <button type="button" class="btn btn-secondary btn-sm" id="btn-revert-original" hidden>Revert to Original</button>
+              <button type="button" class="btn btn-outline btn-sm" id="btn-regenerate-beautify" hidden>Regenerate</button>
+              <button type="button" class="btn btn-secondary btn-sm" id="btn-replace-clothing-image">Replace</button>
+              <button type="button" class="btn btn-outline btn-sm" id="btn-remove-clothing-image">Remove</button>
+            </div>
+            <p class="add-image-note" id="beautify-note" role="status"></p>
+          </div>
+
+          <div class="add-item-tabs" id="add-item-tabs" role="tablist" aria-label="Items to add" hidden></div>
+
+          <div class="add-analysis" id="ai-analysis-status" role="status" data-state="idle"></div>
+
+          <div class="form-row-2">
+            <div class="form-group">
+              <label for="clothing-type">Type <span class="required">*</span> <span class="ai-badge" id="ai-badge-type" hidden>AI</span></label>
+              <select id="clothing-type" data-ai-field="category">
+                <option value="">Select type...</option>
+                <optgroup label="Tops">
+                  <option value="t-shirt">T-Shirt</option>
+                  <option value="shirt">Shirt</option>
+                  <option value="blouse">Blouse</option>
+                  <option value="top">Top</option>
+                </optgroup>
+                <optgroup label="Outerwear">
+                  <option value="jacket">Jacket</option>
+                  <option value="sweater">Sweater</option>
+                  <option value="hoodie">Hoodie</option>
+                </optgroup>
+                <optgroup label="Bottoms">
+                  <option value="pants">Pants</option>
+                  <option value="jeans">Jeans</option>
+                  <option value="shorts">Shorts</option>
+                  <option value="skirt">Skirt</option>
+                  <option value="trousers">Trousers</option>
+                </optgroup>
+                <optgroup label="Footwear">
+                  <option value="shoes">Shoes</option>
+                  <option value="sneakers">Sneakers</option>
+                  <option value="boots">Boots</option>
+                  <option value="sandals">Sandals</option>
+                  <option value="loafers">Loafers</option>
+                </optgroup>
+              </select>
+              <span class="form-error" id="error-type"></span>
+            </div>
+
+            <div class="form-group">
+              <label for="clothing-color">Color <span class="required">*</span> <span class="ai-badge" id="ai-badge-color" hidden>AI</span></label>
+              <select id="clothing-color" data-ai-field="color">
+                <option value="">Select color...</option>
+                <option value="white">White</option>
+                <option value="black">Black</option>
+                <option value="blue">Blue</option>
+                <option value="red">Red</option>
+                <option value="green">Green</option>
+                <option value="navy">Navy</option>
+                <option value="gray">Gray</option>
+                <option value="brown">Brown</option>
+                <option value="beige">Beige</option>
+                <option value="pink">Pink</option>
+                <option value="yellow">Yellow</option>
+                <option value="orange">Orange</option>
+                <option value="purple">Purple</option>
+              </select>
+              <span class="form-error" id="error-color"></span>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="clothing-pattern">Pattern <span class="ai-badge" id="ai-badge-pattern" hidden>AI</span></label>
+            <input type="text" id="clothing-pattern" data-ai-field="pattern" list="clothing-pattern-options" placeholder="e.g. solid, plaid, striped..." />
+            <datalist id="clothing-pattern-options">
+              <option value="solid"></option>
+              <option value="striped"></option>
+              <option value="checked"></option>
+              <option value="graphic"></option>
+              <option value="floral"></option>
+              <option value="polka-dot"></option>
+            </datalist>
+          </div>
+
+          <fieldset class="form-group form-fieldset">
+            <legend>Season <span class="required">*</span> <small>(select all that apply)</small></legend>
+            <div class="chip-options" id="clothing-season">
+              <label class="chip-option"><input type="checkbox" name="clothing-season" value="spring" /> <span>Spring</span></label>
+              <label class="chip-option"><input type="checkbox" name="clothing-season" value="summer" /> <span>Summer</span></label>
+              <label class="chip-option"><input type="checkbox" name="clothing-season" value="fall" /> <span>Fall</span></label>
+              <label class="chip-option"><input type="checkbox" name="clothing-season" value="winter" /> <span>Winter</span></label>
+            </div>
+            <span class="form-error" id="error-season"></span>
+          </fieldset>
+
+          <div class="form-row-2">
+            <div class="form-group">
+              <label for="clothing-occasion">Occasion <span class="required">*</span></label>
+              <select id="clothing-occasion">
+                <option value="">Select occasion...</option>
+                <option value="daily">Daily / Casual</option>
+                <option value="work">Work</option>
+                <option value="formal">Formal</option>
+                <option value="party">Party</option>
+                <option value="sports">Sports / Gym</option>
+                <option value="travel">Travel</option>
+              </select>
+              <span class="form-error" id="error-occasion"></span>
+            </div>
+
+            <div class="form-group">
+              <label for="clothing-rating">Rating</label>
+              <select id="clothing-rating">
+                <option value="">Not rated</option>
+                <option value="5">★★★★★ (5)</option>
+                <option value="4">★★★★☆ (4)</option>
+                <option value="3">★★★☆☆ (3)</option>
+                <option value="2">★★☆☆☆ (2)</option>
+                <option value="1">★☆☆☆☆ (1)</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-row-2">
+            <div class="form-group">
+              <label for="clothing-brand">Brand</label>
+              <input type="text" id="clothing-brand" maxlength="100" placeholder="e.g. Uniqlo" />
+            </div>
+
+            <div class="form-group">
+              <label for="clothing-price">Price (₹)</label>
+              <input type="number" id="clothing-price" placeholder="0.00" step="0.01" min="0" />
+              <span class="form-error" id="error-price"></span>
+            </div>
+          </div>
+
+          <div class="receipt-fill">
+            <input type="file" id="receipt-file" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" hidden />
+            <button type="button" class="link-button" id="btn-receipt-fill"><i data-lucide="receipt"></i> Fill price &amp; brand from a receipt</button>
+            <div class="receipt-lines" id="receipt-lines" role="status"></div>
+          </div>
+
+          <div class="form-group">
+            <label for="clothing-image">Image URL (optional)</label>
+            <input type="url" id="clothing-image" placeholder="https://example.com/image.jpg" />
+          </div>
+
+          <div class="form-actions">
+            <button type="button" class="btn btn-secondary" id="btn-cancel-add">Cancel</button>
+            <button type="submit" class="btn btn-primary" id="btn-submit-add">
+              <i data-lucide="plus"></i>
+              Add to Wardrobe
+            </button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Clothing Detail Modal -->
+  <div class="modal-overlay" id="clothing-detail-modal">
+    <div class="modal modal-detail">
+      <div class="modal-header">
+        <h2 id="detail-title">Clothing Detail</h2>
+        <button class="modal-close" id="modal-close-detail" aria-label="Close">
+          <i data-lucide="x"></i>
+        </button>
+      </div>
+      <div class="modal-body" id="detail-body">
+        <!-- Populated by JS -->
+      </div>
+    </div>
+  </div>
+
+  <!-- Scripts -->
+   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script src="js/auth.js"></script>
+  <script src="js/config.js"></script>
+  <script src="js/dummyData.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/utils.js"></script>
+  <script src="js/toast.js"></script>
+  <script src="js/pages/analytics.js"></script>
+  <script src="js/clothing-beautify.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

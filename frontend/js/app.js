@@ -240,6 +240,8 @@ const App = {
       suggestedType: null,   // type implied by the SAM 3 prompt that found this garment
     });
     const fresh = () => ({
+      mode: 'photo',            // 'photo' (garment / outfit photo) or 'receipt' (items read from a receipt)
+      receipt: null,            // parsed receipt in receipt mode
       originalFile: null,       // exact file the user picked — never modified
       originalUrl: null,
       fingerprint: null,
@@ -315,6 +317,8 @@ const App = {
     // ── Rendering ────────────────────────────────────────────────────────
     const renderCards = () => {
       cardsEl.querySelectorAll('.add-garment-card').forEach(el => el.remove());
+      optionOriginal.hidden = state.mode === 'receipt';
+      if (state.mode === 'receipt') { renderReceiptCards(); bindCardInputs(); return; }
       const original = state.items.get('original');
       optionOriginal.classList.toggle('is-selected', state.selected.includes('original'));
       optionOriginal.classList.toggle('is-saved', original.savedId != null);
@@ -392,9 +396,15 @@ const App = {
       });
 
       const hasExtraction = !!state.extraction;
-      beautifyBtn.hidden = hasExtraction;
-      regenerateBtn.hidden = !hasExtraction;
-      revertBtn.hidden = !hasExtraction || (state.selected.length === 1 && state.selected[0] === 'original');
+      const receiptMode = state.mode === 'receipt';
+      replaceBtn.hidden = receiptMode;
+      removeImageBtn.hidden = false;
+      removeImageBtn.textContent = receiptMode ? 'Start over' : 'Remove';
+      const receiptFill = document.querySelector('.receipt-fill');
+      if (receiptFill) receiptFill.hidden = receiptMode;
+      beautifyBtn.hidden = hasExtraction || receiptMode;
+      regenerateBtn.hidden = !hasExtraction || receiptMode;
+      revertBtn.hidden = !hasExtraction || receiptMode || (state.selected.length === 1 && state.selected[0] === 'original');
       beautifyProgress.hidden = !state.beautifying;
 
       if (state.beautifying) beautifyBtn.innerHTML = `<i data-lucide="loader-2" class="animate-spin"></i> Extracting…`;
@@ -454,7 +464,9 @@ const App = {
       setNote('');
       uploadError.textContent = '';
       preparing.hidden = true;
+      preparing.innerHTML = '<i data-lucide="loader-2" class="animate-spin"></i> Preparing image…';
       uploadArea.hidden = false;
+      if (scanReceiptBtn) scanReceiptBtn.hidden = false;
       setAnalysis('idle', '');
       setStage('upload');
       renderAll();
@@ -537,9 +549,145 @@ const App = {
       }
     });
 
+    // ── Receipt mode: catalogue items straight from a receipt ───────────
+    const scanReceiptBtn = $('btn-scan-receipt');
+    const receiptStartInput = document.createElement('input');
+    receiptStartInput.type = 'file';
+    receiptStartInput.accept = '.jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp';
+    receiptStartInput.hidden = true;
+    form.appendChild(receiptStartInput);
+    const itemPhotoInput = document.createElement('input');
+    itemPhotoInput.type = 'file';
+    itemPhotoInput.accept = '.jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp';
+    itemPhotoInput.hidden = true;
+    form.appendChild(itemPhotoInput);
+    const receiptParseCache = new Map();
+    let photoTargetKey = null;
+
+    /** Reads the receipt (one Gemini request per receipt, cached) and switches the form to receipt mode. */
+    const startWithReceipt = async (file, { detected = false } = {}) => {
+      uploadError.textContent = '';
+      if (file.size > MAX_IMAGE_SIZE) { uploadError.textContent = 'Receipt image must be 10 MB or smaller.'; return; }
+      setStage('upload');
+      uploadArea.hidden = true;
+      if (scanReceiptBtn) scanReceiptBtn.hidden = true;
+      preparing.hidden = false;
+      preparing.innerHTML = `<i data-lucide="loader-2" class="animate-spin"></i> ${detected ? 'This looks like a receipt — reading it…' : 'Reading receipt…'}`;
+      refreshIcons();
+      const session = ++sessionCounter;
+      state.session = session;
+      let r;
+      try {
+        const key = fingerprintOf(file);
+        r = receiptParseCache.get(key) || await API.parseReceipt(await compressImage(file, 1600));
+        receiptParseCache.set(key, r);
+      } catch (err) {
+        if (session !== state.session) return;
+        preparing.hidden = true;
+        uploadArea.hidden = false;
+        if (scanReceiptBtn) scanReceiptBtn.hidden = false;
+        uploadError.textContent = `${err.unavailable ? 'Receipt reading is unavailable' : 'Could not read the receipt'}: ${err.message || ''}`;
+        return;
+      }
+      if (session !== state.session) return;
+      preparing.hidden = true;
+
+      if (state.originalUrl) URL.revokeObjectURL(state.originalUrl);
+      const next = fresh();
+      next.session = session;
+      next.mode = 'receipt';
+      next.receipt = r;
+      next.items = new Map();
+      const lines = (r.items && r.items.length) ? r.items : [{ name: 'Item', price: r.total, category: null, color: null }];
+      lines.forEach((line, i) => {
+        const it = makeItem(`receipt:${i}`, (line.name || 'Item').slice(0, 28), null, null);
+        if (line.category && Array.from(typeEl.options).some(o => o.value === line.category)) { it.values.type = line.category; it.edited.type = true; }
+        if (line.color) { it.values.color = line.color; it.edited.color = true; }
+        if (line.price != null) it.values.price = String(line.price);
+        if (r.store) it.values.brand = r.store;
+        it.file = null; it.photoUrl = null;
+        next.items.set(it.key, it);
+      });
+      next.selected = [...next.items.keys()];
+      next.activeKey = next.selected[0];
+      state = next;
+
+      const n = next.items.size;
+      setNote(`Read from the receipt${r.store ? ` (${r.store}${r.date ? ', ' + r.date : ''})` : ''}: ${n} clothing item${n > 1 ? 's' : ''}. ` +
+        'Untick anything you don\'t want to add. A photo is optional — tap "Add photo" on a card.', 'info');
+      setAnalysis('done', `<i data-lucide="receipt"></i> Filled from your receipt: brand${lines.some(l => l.price != null) ? ', price' : ''}` +
+        `${lines.some(l => l.category) ? ', type' : ''}${lines.some(l => l.color) ? ', colour' : ''} where printed. Please add season and occasion.`);
+      setStage('details');
+      renderAll();
+    };
+
+    function renderReceiptCards() {
+      state.items.forEach((it) => {
+        const card = document.createElement('label');
+        card.className = 'add-image-option add-garment-card add-receipt-card';
+        card.dataset.key = it.key;
+        const sel = state.selected.includes(it.key), saved = it.savedId != null;
+        card.classList.toggle('is-selected', sel);
+        card.classList.toggle('is-saved', saved);
+        card.innerHTML = `
+          <input type="checkbox" class="add-image-select" value="${it.key}" ${sel ? 'checked' : ''} ${saved ? 'disabled' : ''} />
+          ${it.photoUrl
+            ? `<img src="${it.photoUrl}" alt="${Utils.escapeHTML(it.label)}" />`
+            : `<span class="add-image-failed add-receipt-nophoto"><i data-lucide="receipt"></i><span>No photo yet</span></span>`}
+          ${saved ? '' : `<button type="button" class="link-button add-item-photo" data-photo-for="${it.key}">${it.photoUrl ? 'Change photo' : 'Add photo'}</button>`}
+          <span class="add-image-caption">${Utils.escapeHTML(it.label)}${saved ? ' · Added ✓' : ''}</span>`;
+        cardsEl.insertBefore(card, beautifyProgress);
+      });
+      cardsEl.querySelectorAll('[data-photo-for]').forEach(btn => btn.addEventListener('click', (e) => {
+        e.preventDefault(); e.stopPropagation();
+        if (state.saving) return;
+        photoTargetKey = btn.dataset.photoFor;
+        itemPhotoInput.click();
+      }));
+      refreshIcons();
+    }
+
+    /** Optional photo for a receipt item; the AI then fills only what the receipt did not say. */
+    itemPhotoInput.addEventListener('change', async () => {
+      const file = itemPhotoInput.files && itemPhotoInput.files[0];
+      itemPhotoInput.value = '';
+      const it = state.items.get(photoTargetKey);
+      if (!file || !it) return;
+      const ext = (file.name.split('.').pop() || '').toLowerCase();
+      if ((!allowedTypes.includes(file.type) && !['jpg', 'jpeg', 'png', 'webp'].includes(ext)) || file.size > MAX_IMAGE_SIZE) {
+        Toast.error('Invalid image', 'Choose a JPG, PNG or WEBP image no larger than 10 MB.');
+        return;
+      }
+      if (it.photoUrl) URL.revokeObjectURL(it.photoUrl);
+      it.file = file;
+      it.photoUrl = URL.createObjectURL(file);
+      state.activeKey = it.key;
+      renderAll();
+      const session = state.session;
+      try {
+        const fp = fingerprintOf(file);
+        const a = analysisCache.get(fp) || await API.analyzeClothingImage(await compressImage(file, 768));
+        analysisCache.set(fp, a);
+        if (session !== state.session || a.imageKind === 'receipt') return;
+        it.photoAnalysis = a;
+        applyAiToItem(it);
+        loadForm(); renderTabs();
+      } catch (err) {
+        console.warn('AI recognition for the item photo failed:', err);
+      }
+    });
+
+    if (scanReceiptBtn) scanReceiptBtn.addEventListener('click', () => { if (!state.saving) receiptStartInput.click(); });
+    receiptStartInput.addEventListener('change', () => {
+      const file = receiptStartInput.files && receiptStartInput.files[0];
+      receiptStartInput.value = '';
+      if (file) startWithReceipt(file);
+    });
+
     // ── Step 2: AI recognition (category, colour, pattern only) ─────────
     /** The AI values that belong to an item: whole photo → main garment; garment → its group. */
     const aiValuesFor = (it) => {
+      if (it.photoAnalysis) return it.photoAnalysis;   // photo added to a receipt item
       const a = state.analysis;
       if (!a) return null;
       if (it.key === 'original') return a;
@@ -554,6 +702,8 @@ const App = {
       const v = { ...(aiValuesFor(it) || {}) };
       // A garment SAM 3 found as e.g. "jacket" is a jacket, even if the photo-level AI saw a shirt.
       if (it.suggestedType && Array.from(typeEl.options).some(o => o.value === it.suggestedType)) v.category = it.suggestedType;
+      // No AI colour (AI off, or unsure): use the colour measured from the garment's own pixels.
+      if (!v.color && it.measuredColor) v.color = it.measuredColor;
       const missing = [];
       AI_FIELDS.forEach(f => {
         const value = v ? v[f.aiKey] : null;
@@ -598,6 +748,10 @@ const App = {
     const runAnalysis = async () => {
       const session = state.session;
       const fp = state.fingerprint;
+      if (analysisCache.has(fp) && analysisCache.get(fp).imageKind === 'receipt') {
+        startWithReceipt(state.originalFile, { detected: true });
+        return;
+      }
       if (analysisCache.has(fp)) {
         state.analysis = analysisCache.get(fp);
         applyAnalysis();
@@ -611,6 +765,12 @@ const App = {
         const result = await API.analyzeClothingImage(small);
         analysisCache.set(fp, result);
         if (session !== state.session) return;
+        if (result.imageKind === 'receipt') {
+          // Uploaded a receipt through "Upload Image": read it instead of treating it as clothing.
+          state.analyzing = false;
+          startWithReceipt(state.originalFile, { detected: true });
+          return;
+        }
         state.analysis = result;
         applyAnalysis();
       } catch (err) {
@@ -644,6 +804,7 @@ const App = {
         if (!it) {
           it = makeItem(key, g.name, g.group, g.aiGroup);
           it.suggestedType = g.suggestedType || null;
+          it.measuredColor = g.measuredColor || null;
           state.items.set(key, it);
           applyAiToItem(it);
         }
@@ -720,6 +881,61 @@ const App = {
     revertBtn.addEventListener('click', () => select('original', true));
     bindCardInputs();
 
+    // ── Receipt: fill brand / price (and type / colour if empty) from a receipt photo ──
+    const receiptBtn = $('btn-receipt-fill');
+    const receiptInput = $('receipt-file');
+    const receiptLines = $('receipt-lines');
+    const receiptCache = new Map();
+    let lastReceipt = null;
+
+    const renderReceipt = (r) => {
+      lastReceipt = r;
+      if (!r.items || !r.items.length) {
+        receiptLines.innerHTML = `<span class="receipt-msg">No clothing lines could be read on this receipt${r.store ? ` from ${Utils.escapeHTML(r.store)}` : ''}.</span>`;
+        return;
+      }
+      const money = (n) => n == null ? '—' : (r.currency && r.currency !== 'INR' ? `${r.currency} ` : '₹') + Number(n).toLocaleString('en-IN');
+      receiptLines.innerHTML = `<span class="receipt-msg">${r.store ? `<strong>${Utils.escapeHTML(r.store)}</strong> · ` : ''}Pick the line for this item:</span>` +
+        r.items.map((line, i) => `<button type="button" class="chip-option receipt-line" data-line="${i}">${Utils.escapeHTML(line.name)} <strong>${money(line.price)}</strong></button>`).join('');
+      receiptLines.querySelectorAll('.receipt-line').forEach(btn => btn.addEventListener('click', () => {
+        const it = activeItem();
+        if (!it || it.savedId != null) return;
+        const line = lastReceipt.items[Number(btn.dataset.line)];
+        if (line.price != null) it.values.price = String(line.price);
+        if (lastReceipt.store && !it.values.brand) it.values.brand = lastReceipt.store;
+        if (line.category && !it.values.type && Array.from(typeEl.options).some(o => o.value === line.category)) { it.values.type = line.category; it.edited.type = true; }
+        if (line.color && !it.values.color) { it.values.color = line.color; it.edited.color = true; }
+        receiptLines.querySelectorAll('.receipt-line').forEach(b => b.classList.toggle('is-picked', b === btn));
+        loadForm(); renderTabs();
+      }));
+    };
+
+    if (receiptBtn && receiptInput) {
+      receiptBtn.addEventListener('click', () => { if (!state.saving) receiptInput.click(); });
+      receiptInput.addEventListener('change', async () => {
+        const file = receiptInput.files && receiptInput.files[0];
+        receiptInput.value = '';
+        if (!file) return;
+        if (file.size > MAX_IMAGE_SIZE) { receiptLines.innerHTML = '<span class="receipt-msg is-error">Receipt image must be 10 MB or smaller.</span>'; return; }
+        const key = fingerprintOf(file);
+        if (receiptCache.has(key)) { renderReceipt(receiptCache.get(key)); return; }
+        receiptBtn.disabled = true;
+        receiptLines.innerHTML = '<span class="receipt-msg"><i data-lucide="loader-2" class="animate-spin"></i> Reading receipt…</span>';
+        refreshIcons();
+        try {
+          const r = await API.parseReceipt(await compressImage(file, 1600));
+          receiptCache.set(key, r);
+          renderReceipt(r);
+        } catch (err) {
+          receiptLines.innerHTML = `<span class="receipt-msg is-error">${err.unavailable ? 'Receipt reading is unavailable' : 'Could not read the receipt'}: ${Utils.escapeHTML(err.message || '')} You can type the price and brand instead.</span>`;
+        } finally {
+          receiptBtn.disabled = false;
+          refreshIcons();
+        }
+      });
+      form.addEventListener('reset', () => { receiptLines.innerHTML = ''; lastReceipt = null; });
+    }
+
     // ── Validation ───────────────────────────────────────────────────────
     const showFieldError = (id, el, message) => {
       const span = $(id);
@@ -775,6 +991,13 @@ const App = {
      * insert fails, so a failure never leaves a half-saved item behind.
      */
     const saveItem = async (it, compressedOriginal) => {
+      if (state.mode === 'receipt') {
+        const photo = it.file ? await compressImage(it.file) : null;
+        const created = await API.addClothingItem(toItemData(it.values), photo, null);
+        if (!created || created.id == null) throw new Error('The item could not be saved. Please try again.');
+        it.savedId = created.id;
+        return;
+      }
       const isGarment = it.key !== 'original';
       const finalFile = isGarment ? it.file : compressedOriginal;
       const originalForUpload = isGarment ? compressedOriginal : null;
@@ -790,7 +1013,7 @@ const App = {
       clearFieldErrors();
       state.items.forEach(it => { it._invalid = false; });
       const todo = pendingSelection();
-      if (!state.originalFile) { Toast.error('Missing details', 'Upload an image first.'); return; }
+      if (state.mode !== 'receipt' && !state.originalFile) { Toast.error('Missing details', 'Upload an image first.'); return; }
       if (!todo.length) { Toast.error('Nothing selected', 'Tick at least one image to add to your wardrobe.'); return; }
 
       const invalid = todo.filter(it => itemProblems(it).length);
@@ -814,7 +1037,7 @@ const App = {
       try {
         setSubmitLabel('Preparing image…');
         // Extracted garment PNGs are uploaded as-is; the original is compressed like before.
-        const compressedOriginal = await compressImage(state.originalFile);
+        const compressedOriginal = state.originalFile ? await compressImage(state.originalFile) : null;
         for (let i = 0; i < todo.length; i++) {
           const it = todo[i];
           setSubmitLabel(todo.length > 1 ? `Saving ${i + 1} of ${todo.length}…` : 'Saving…');

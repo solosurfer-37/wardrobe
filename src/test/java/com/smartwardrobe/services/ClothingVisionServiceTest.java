@@ -96,4 +96,24 @@ class ClothingVisionServiceTest {
         assertEquals("shirt", r.getCategory());
         assertEquals(0, r.getGarments().size());
     }
+
+    @Test
+    void receiptPhotoIsRecognisedAndHasNoGarmentValues() {
+        ClothingAnalysisResponse r = ClothingVisionService.interpretResponse(geminiReply(
+                "{\"imageKind\":\"receipt\",\"category\":\"shirt\",\"categoryConfidence\":0.9,\"color\":\"white\",\"colorConfidence\":0.9,"
+                + "\"pattern\":\"solid\",\"patternConfidence\":0.9,\"garments\":[{\"group\":\"top\",\"category\":\"shirt\",\"categoryConfidence\":0.9,"
+                + "\"color\":\"white\",\"colorConfidence\":0.9,\"pattern\":\"solid\",\"patternConfidence\":0.9}]}"), 0.6);
+        assertEquals("receipt", r.getImageKind());
+        assertNull(r.getCategory(), "no clothing values for a receipt");
+        assertEquals(0, r.getGarments().size());
+    }
+
+    @Test
+    void missingImageKindMeansClothing() {
+        ClothingAnalysisResponse r = ClothingVisionService.interpretResponse(geminiReply(
+                "{\"category\":\"jeans\",\"categoryConfidence\":0.9,\"color\":\"blue\",\"colorConfidence\":0.9,"
+                + "\"pattern\":\"solid\",\"patternConfidence\":0.9}"), 0.6);
+        assertEquals("clothing", r.getImageKind());
+        assertEquals("jeans", r.getCategory());
+    }
 }

@@ -172,7 +172,32 @@ const Utils = {
         <span class="detail-field-label">Last Worn</span>
         <span class="detail-field-value">${this.formatDate(item.lastWornDate)}</span>
       </div>
+      <div class="detail-wear">
+        <button type="button" class="btn btn-secondary btn-sm" id="btn-mark-worn">
+          <i data-lucide="check-circle"></i> Mark as worn today
+        </button>
+      </div>
     `;
+
+    // Logging wears feeds usage-decay (outfit picks), utilization and cost per wear.
+    const wornBtn = body.querySelector('#btn-mark-worn');
+    if (wornBtn && typeof API !== 'undefined' && API.logWear) {
+      wornBtn.addEventListener('click', async () => {
+        wornBtn.disabled = true;
+        try {
+          const [updated] = await API.logWear([item]);
+          Toast.success('Logged', `${this.capitalize(item.type)} marked as worn today (${(updated && updated.wearCount) || (Number(item.wearCount) || 0) + 1} wears).`);
+          modal.classList.remove('active');
+          if (window.WardrobePage && WardrobePage.fetchItems) WardrobePage.fetchItems();
+          else if (window.DashboardPage && DashboardPage.loadDashboardData) DashboardPage.loadDashboardData();
+          else if (window.AnalyticsPage && AnalyticsPage.loadAnalyticsData) AnalyticsPage.loadAnalyticsData();
+          else if (window.OutfitsPage && OutfitsPage.generateRecommendations) OutfitsPage.generateRecommendations();
+        } catch (err) {
+          wornBtn.disabled = false;
+          Toast.error('Could not log wear', err.message || 'Please try again.');
+        }
+      });
+    }
 
     modal.classList.add('active');
     lucide.createIcons();

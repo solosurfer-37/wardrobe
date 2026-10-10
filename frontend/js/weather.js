@@ -1,5 +1,8 @@
 (function () {
   const $ = id => document.getElementById(id);
+  // Elements can be removed from the card (e.g. the tip line is commented out in index.html):
+  // write only to the ones that exist, so one missing element never breaks the whole card.
+  const setText = (id, v) => { const el = $(id); if (el) el.textContent = v; };
   const card = $('weather-card');
   if (!card) return;
 
@@ -22,6 +25,7 @@
 
   function fx(cond) {
     const box = $('wx-fx');
+    if (!box) return;
     box.innerHTML = '';
     if (cond !== 'rain' && cond !== 'storm' && cond !== 'snow') return;
     const snow = cond === 'snow', n = snow ? 30 : 45;
@@ -39,14 +43,16 @@
     const [cond, desc, icon] = MAP(d.weather_code);
     const t = Math.round(d.temperature_2m);
     card.dataset.cond = cond;
-    $('wx-loc').innerHTML = '<i data-lucide="map-pin"></i> ' + placeName;
-    $('wx-desc').textContent = desc;
-    $('wx-temp').textContent = t;
-    $('wx-feels').textContent = Math.round(d.apparent_temperature) + '°';
-    $('wx-hum').textContent = d.relative_humidity_2m;
-    $('wx-wind').textContent = Math.round(d.wind_speed_10m);
-    $('wx-tip').textContent = tip(t, cond);
-    $('wx-icon').setAttribute('data-lucide', icon);
+    const loc = $('wx-loc');
+    if (loc) loc.innerHTML = '<i data-lucide="map-pin"></i> ' + placeName;
+    setText('wx-desc', desc);
+    setText('wx-temp', t);
+    setText('wx-feels', Math.round(d.apparent_temperature) + '°');
+    setText('wx-hum', d.relative_humidity_2m);
+    setText('wx-wind', Math.round(d.wind_speed_10m));
+    setText('wx-tip', tip(t, cond));
+    const ic = $('wx-icon');
+    if (ic) ic.setAttribute('data-lucide', icon);
     fx(cond);
     window.lucide && lucide.createIcons();
   }
@@ -59,8 +65,8 @@
       const j = await r.json();
       render(j.current, placeName);
     } catch (e) {
-      $('wx-desc').textContent = 'Unavailable';
-      $('wx-tip').textContent = 'Weather load nahi hua. Internet check kar.';
+      setText('wx-desc', 'Unavailable');
+      setText('wx-tip', 'Weather load nahi hua. Internet check kar.');
     }
   }
 

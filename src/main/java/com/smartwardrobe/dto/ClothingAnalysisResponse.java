@@ -22,6 +22,8 @@ public class ClothingAnalysisResponse {
     private Double colorConfidence;
     private Double patternConfidence;
     private List<Garment> garments = new ArrayList<>();
+    /** What the photo shows: "clothing", "receipt" or "other". A receipt switches the form to receipt mode. */
+    private String imageKind = "clothing";
 
     /** One garment seen in the photo. {@code group} is always set; the other values may be null. */
     public static class Garment {
@@ -93,6 +95,9 @@ public class ClothingAnalysisResponse {
 
     public Double getPatternConfidence() { return patternConfidence; }
     public void setPatternConfidence(Double patternConfidence) { this.patternConfidence = patternConfidence; }
+
+    public String getImageKind() { return imageKind; }
+    public void setImageKind(String imageKind) { this.imageKind = imageKind; }
 
     public List<Garment> getGarments() { return garments; }
     public void setGarments(List<Garment> garments) { this.garments = garments == null ? new ArrayList<>() : garments; }

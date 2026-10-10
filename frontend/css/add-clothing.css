@@ -138,3 +138,78 @@
 .form-group .chip-option:has(input:focus-visible) { box-shadow: 0 0 0 3px rgba(107, 123, 94, 0.12); }
 
 #add-clothing-modal .form-actions .btn:disabled { opacity: 0.6; cursor: not-allowed; }
+
+/* ── Receipt fill (Add form) ── */
+.receipt-fill { margin: calc(-1 * var(--space-2)) 0 var(--space-4); }
+.receipt-fill .link-button { display: inline-flex; align-items: center; gap: var(--space-1); font-size: var(--text-sm); }
+.receipt-fill .link-button svg { width: 15px; height: 15px; }
+.receipt-lines { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-top: var(--space-2); }
+.receipt-lines:empty { display: none; }
+.receipt-msg { width: 100%; font-size: var(--text-xs); color: var(--text-secondary); display: flex; align-items: center; gap: var(--space-1); }
+.receipt-msg svg { width: 14px; height: 14px; }
+.receipt-msg.is-error { color: var(--color-error); }
+.receipt-line {
+  display: inline-flex; align-items: center; gap: var(--space-2);
+  padding: var(--space-2) var(--space-3); border: 1px solid var(--border-input); border-radius: var(--radius-full);
+  background: var(--bg-card); font: inherit; font-size: var(--text-xs); cursor: pointer; color: var(--text-primary);
+}
+.receipt-line.is-picked { border-color: var(--accent-primary); background: var(--color-olive-bg); }
+
+/* ── Outfits: dress code + calendar bar ── */
+.outfit-context-bar {
+  display: flex; flex-direction: column; gap: var(--space-3);
+  padding: var(--space-4); margin-bottom: var(--space-2);
+  border: 1px solid var(--border-light); border-radius: var(--radius-lg); background: var(--bg-card);
+}
+.outfit-context-bar:empty { display: none; }
+.ctx-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); font-size: var(--text-sm); }
+.ctx-row svg { width: 15px; height: 15px; vertical-align: -3px; margin-right: 2px; }
+.ctx-label { font-weight: var(--weight-semibold); margin-right: var(--space-2); }
+.ctx-chips { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.ctx-chip {
+  padding: var(--space-1) var(--space-3); border: 1px solid var(--border-input); border-radius: var(--radius-full);
+  background: var(--bg-card); color: var(--text-primary); font: inherit; font-size: var(--text-sm); cursor: pointer;
+}
+.ctx-chip.is-active { border-color: var(--accent-primary); background: var(--color-olive-bg); font-weight: var(--weight-semibold); }
+.ctx-muted { color: var(--text-muted); }
+.ctx-warn { color: var(--color-warning); }
+.ctx-calendar .link-button { display: inline-flex; align-items: center; gap: var(--space-1); }
+.ctx-connect { display: flex; flex-wrap: wrap; gap: var(--space-2); width: 100%; }
+.ctx-connect[hidden] { display: none; }
+.ctx-connect input {
+  flex: 1 1 260px; min-width: 0; padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border-input); border-radius: 8px; background: var(--bg-card); color: var(--text-primary); font: inherit;
+}
+.ctx-help { width: 100%; margin: 0; font-size: var(--text-xs); color: var(--text-muted); }
+
+/* ── Outfit cards: engine reason + wear action ── */
+.outfit-reason {
+  display: flex; gap: var(--space-2); align-items: flex-start;
+  margin-top: var(--space-3); padding: var(--space-3); border-radius: var(--radius-md);
+  background: var(--color-olive-bg); font-size: var(--text-sm); color: var(--text-primary); line-height: var(--leading-normal);
+}
+.outfit-reason svg { width: 16px; height: 16px; flex-shrink: 0; margin-top: 2px; color: var(--color-olive); }
+.outfit-card-actions { display: flex; justify-content: flex-end; margin-top: var(--space-3); }
+.outfit-card-actions .btn svg { width: 15px; height: 15px; }
+
+/* ── Item detail: mark as worn ── */
+.detail-wear { display: flex; justify-content: flex-end; margin-top: var(--space-4); }
+.detail-wear .btn svg { width: 15px; height: 15px; }
+
+/* ── Step 1: "or Scan a receipt" ── */
+#add-clothing-modal .add-or { display: flex; align-items: center; gap: var(--space-3); margin: var(--space-3) 0; color: var(--text-muted); font-size: var(--text-xs); }
+#add-clothing-modal .add-or::before, #add-clothing-modal .add-or::after { content: ''; flex: 1; height: 1px; background: var(--border-light); }
+#add-clothing-modal .add-or:has(+ .add-receipt-start[hidden]) { display: none; }
+.add-receipt-start {
+  display: flex; align-items: center; gap: var(--space-3); width: 100%;
+  padding: var(--space-4); border: 1px solid var(--border-medium); border-radius: var(--radius-md);
+  background: var(--bg-card); color: var(--text-primary); font: inherit; text-align: left; cursor: pointer;
+}
+.add-receipt-start:hover { background: var(--bg-hover); }
+.add-receipt-start svg { width: 24px; height: 24px; flex-shrink: 0; color: var(--color-olive); }
+.add-receipt-start span { display: flex; flex-direction: column; gap: 2px; }
+.add-receipt-start small { color: var(--text-muted); font-size: var(--text-xs); }
+
+/* ── Receipt items: optional photo per card ── */
+.add-receipt-nophoto { color: var(--text-muted); background: var(--bg-secondary); border-radius: var(--radius-sm); }
+.add-item-photo { font-size: var(--text-xs); align-self: center; }

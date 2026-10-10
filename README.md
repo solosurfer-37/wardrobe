@@ -61,7 +61,8 @@ The brain of the application lives in the `OutfitRecommendationService`, utilizi
 ### ✨ AI Recommendations (`/api/outfits`)
 | Method | Endpoint | Description |
 |---|---|---|
-| `GET` | `/api/outfits/recommend` | Returns top 3 context-aware outfits. Accepts optional `latitude` and `longitude` params. |
+| `POST` | `/api/outfits/recommend` | **Used by the app.** Body `{ latitude, longitude, event, date, items }` — the logged-in user's wardrobe from Supabase. Runs the OutfitEngine with live Open-Meteo weather, the dress code (calendar or picker), today's season, the colour graph and usage-decay. Returns `{ outfits, weather, event, season, seasonFiltered }`. |
+| `GET` | `/api/outfits/recommend` | Legacy demo: same engine on the first user in the database. |
 
 ### 📊 Analytics Dashboard (`/api/analytics`)
 | Method | Endpoint | Description |
@@ -85,9 +86,20 @@ The brain of the application lives in the `OutfitRecommendationService`, utilizi
 4. The user ticks which images to add — the whole photo or individual garments (never both, to avoid duplicates). Each ticked garment is its own item with its own details, edited via tabs.
 5. **Add to Wardrobe** saves each item through Supabase (`API.addClothingItem`): image (and original photo) uploaded to the `clothes` bucket first, rolled back if the insert fails. Items already added are never added again on retry.
 
+### 👗 Daily outfits (Outfits page)
+- **Dress code**: chips (Casual / College / Work / Party / Formal) or **Auto**, which reads today's events from the connected calendar ("Client meeting" → Work, "Wedding" → Formal).
+- **Smart engine**: the backend's OutfitEngine ranks top × bottom × shoes (+ outerwear when needed) by warmth, rain, wind, layering, fabric, formality and **usage-decay**, skips items worn in the last 2 days, and explains each pick. If the backend is offline, a basic in-browser picker is used and labelled as such.
+- **Wear tracking**: "Wear this look today" (outfit cards) and "Mark as worn today" (item details) update wear count and last-worn date, feeding usage-decay, utilization and cost-per-wear.
+
+### 🧾 Receipts & colour
+- **Receipt → details**: in the Add form, "Fill price & brand from a receipt" reads the receipt (Gemini) and lets the user pick the matching line.
+- **Colour extraction**: each extracted garment's dominant colour is measured from its own pixels (Lab colour space) and used whenever the AI cannot name the colour.
+
 Configuration (`.env`, backend only): `GEMINI_API_KEY` (free key from Google AI Studio), optional `GEMINI_MODEL` (default `gemini-flash-latest`) and `VISION_MIN_CONFIDENCE` (default `0.6`); `ROBOFLOW_API_KEY` (free tier at app.roboflow.com) for SAM 3. Without keys the modal still works: manual entry, and the on-device model for Beautify. The frontend reaches the backend at `CONFIG.API_BASE_URL` (default `http://localhost:8080`).
 | `GET` | `/api/ocr/parse-receipt` | Mocks automated receipt parsing via OCR |
+| `POST` | `/api/ocr/parse-receipt` | **Real** receipt reading (Gemini): store, date, total and clothing lines with prices — fills brand/price in the Add form |
 | `GET` | `/api/calendar/today-events` | Mocks Calendar integration for event-driven dress codes |
+| `GET` | `/api/calendar/today?ics=…&date=…&tzOffset=…` | **Real** calendar: today's events from the user's private iCal link (Google / Outlook / iCloud) and the dress code they imply |
 
 ---
 

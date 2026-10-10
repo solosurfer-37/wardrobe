@@ -260,9 +260,38 @@ const API = {
   },
 
   // ═══════ Outfits ═══════
-  async getOutfitRecommendations(latitude, longitude) {
-    // lat/lon abhi use nahi (weather ke liye alag se Open-Meteo laga sakte hain)
-    return Logic.recommend(await this.getAllClothes());
+  /**
+   * Smart outfit engine (Spring backend): the logged-in user's own items are sent along, and the
+   * backend adds live weather, today's season and the dress code from `event` (calendar / picker),
+   * then ranks outfits with the colour graph and usage-decay.
+   * Falls back to the simple in-browser picker if the backend is not reachable.
+   * Resolves to { engine: 'smart'|'basic', outfits, weather?, event?, season?, seasonFiltered?, fallbackReason? }
+   */
+  async getOutfitRecommendations(latitude, longitude, event = null) {
+    const items = await this.getAllClothes();
+    const today = new Date();
+    const localDate = new Date(today.getTime() - today.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+    try {
+      const res = await this._json('/api/outfits/recommend', {
+        method: 'POST',
+        body: JSON.stringify({ latitude, longitude, event, date: localDate, items }),
+      }, 20000);
+      return { ...res, engine: 'smart', itemCount: items.length };
+    } catch (err) {
+      console.warn('Smart outfit engine unavailable, using the basic picker:', err);
+      return { engine: 'basic', outfits: Logic.recommend(items), fallbackReason: err.message, itemCount: items.length };
+    }
+  },
+
+  /** Records that these items were worn today (feeds usage-decay, utilization and cost per wear). */
+  async logWear(items) {
+    const today = new Date();
+    const localDate = new Date(today.getTime() - today.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+    const updated = [];
+    for (const item of items) {
+      updated.push(await this.updateClothingItem(item.id, { wearCount: (Number(item.wearCount) || 0) + 1, lastWornDate: localDate }));
+    }
+    return updated;
   },
 
   // ═══════ Analytics ═══════
@@ -270,8 +299,76 @@ const API = {
     return Logic.stats(await this.getAllClothes());
   },
 
-  // ═══════ Calendar (mock) ═══════
+  // ═══════ Calendar (iCal link, read by the backend) ═══════
+  calendarLink() {
+    return localStorage.getItem('wardrobe_calendar_ics') || '';
+  },
+
+  setCalendarLink(url) {
+    if (url) localStorage.setItem('wardrobe_calendar_ics', url.trim());
+    else localStorage.removeItem('wardrobe_calendar_ics');
+  },
+
+  /** Today's events from the connected calendar: { events, suggestedEvent, title } or null if none connected. */
+  async getTodayCalendar() {
+    const ics = this.calendarLink();
+    if (!ics) return null;
+    const now = new Date();
+    const localDate = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+    const params = new URLSearchParams({ ics, date: localDate, tzOffset: String(-now.getTimezoneOffset()) });
+    return this._json(`/api/calendar/today?${params}`, { method: 'GET' }, 20000);
+  },
+
+  /** Dashboard card: the most important event today, or the sample event when no calendar is connected. */
   async getCalendarEvents() {
-    return (typeof DUMMY_DATA !== 'undefined' && DUMMY_DATA.calendar) ? DUMMY_DATA.calendar : null;
+    if (this.calendarLink()) {
+      try {
+        const t = await this.getTodayCalendar();
+        if (!t || !t.events.length) return { title: 'No events today', category: 'Free day', dressCode: 'Casual', time: '', source: 'calendar' };
+        const main = t.events.find(e => e.summary === t.title) || t.events[0];
+        const label = { casual: 'Casual', college: 'Smart Casual', party: 'Party', work: 'Business', formal: 'Formal' }[t.suggestedEvent] || 'Casual';
+        return { title: main.summary, category: `${t.events.length} event${t.events.length > 1 ? 's' : ''} today`, dressCode: label,
+          time: main.allDay ? 'All day' : main.start, source: 'calendar' };
+      } catch (err) {
+        console.warn('Calendar unavailable:', err);
+      }
+    }
+    return (typeof DUMMY_DATA !== 'undefined' && DUMMY_DATA.calendar) ? { ...DUMMY_DATA.calendar, source: 'sample' } : null;
+  },
+
+  // ═══════ Receipts ═══════
+  /** Reads a receipt photo (Gemini): { store, date, currency, total, items: [{ name, price, category, color }] } */
+  async parseReceipt(file) {
+    return this._postImage('/api/ocr/parse-receipt', file, 45000);
+  },
+
+  /** JSON request to the Spring backend with a timeout; errors carry status / unavailable. */
+  async _json(path, options, timeoutMs) {
+    const baseUrl = localStorage.getItem('wardrobe_api_url') || CONFIG.API_BASE_URL;
+    const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    const timer = controller ? setTimeout(() => controller.abort(), timeoutMs) : null;
+    let response;
+    try {
+      response = await fetch(`${baseUrl}${path}`, {
+        ...options,
+        headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
+        signal: controller ? controller.signal : undefined,
+      });
+    } catch (error) {
+      const err = new Error(error && error.name === 'AbortError' ? 'The server took too long.' : 'Backend not reachable at ' + baseUrl + '.');
+      err.isNetworkError = true; err.unavailable = true;
+      throw err;
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
+    if (!response.ok) {
+      let body = {};
+      try { body = await response.json(); } catch (_) {}
+      const err = new Error(body.error || body.message || `Request failed (${response.status})`);
+      err.status = response.status;
+      err.unavailable = [503, 404, 405].includes(response.status);
+      throw err;
+    }
+    return response.json();
   },
 };

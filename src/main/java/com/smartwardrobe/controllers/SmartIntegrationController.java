@@ -5,7 +5,9 @@ import com.smartwardrobe.dto.ClothingAnalysisResponse;
 import com.smartwardrobe.dto.ReceiptOcrResponse;
 import com.smartwardrobe.dto.VisionAnalysisResponse;
 import com.smartwardrobe.services.ClothingVisionService;
+import com.smartwardrobe.services.CalendarService;
 import com.smartwardrobe.services.GarmentSegmentationService;
+import com.smartwardrobe.services.ReceiptOcrService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -34,11 +36,68 @@ public class SmartIntegrationController {
 
     private final ClothingVisionService visionService;
     private final GarmentSegmentationService segmentationService;
+    private final ReceiptOcrService receiptService;
+    private final CalendarService calendarService;
 
     public SmartIntegrationController(ClothingVisionService visionService,
-                                      GarmentSegmentationService segmentationService) {
+                                      GarmentSegmentationService segmentationService,
+                                      ReceiptOcrService receiptService,
+                                      CalendarService calendarService) {
         this.visionService = visionService;
         this.segmentationService = segmentationService;
+        this.receiptService = receiptService;
+        this.calendarService = calendarService;
+    }
+
+    /**
+     * POST /api/ocr/parse-receipt  (multipart field "file")
+     * Reads a receipt photo with Gemini: { store, date, currency, total, items: [{name, price, category, color}] }.
+     *   503 → GEMINI_API_KEY missing   429 → quota   422 → unreadable   502 → provider error
+     */
+    @PostMapping("/ocr/parse-receipt")
+    public ResponseEntity<?> parseReceipt(@RequestParam("file") MultipartFile file) {
+        if (file == null || file.isEmpty()) {
+            return ResponseEntity.badRequest().body(Map.of("error", "Receipt image is required"));
+        }
+        String contentType = file.getContentType();
+        if (contentType == null || !contentType.toLowerCase().startsWith("image/")) {
+            return ResponseEntity.badRequest().body(Map.of("error", "Only images of receipts can be read"));
+        }
+        try {
+            return ResponseEntity.ok(receiptService.parse(file.getBytes(), contentType));
+        } catch (ClothingVisionService.VisionUnavailableException e) {
+            return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(Map.of("error", e.getMessage()));
+        } catch (ClothingVisionService.VisionAnalysisException e) {
+            log.warn("Receipt reading failed: {}", e.getMessage());
+            return ResponseEntity.status(e.getStatus()).body(Map.of("error", e.getMessage()));
+        } catch (IOException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", "Could not read the uploaded image"));
+        }
+    }
+
+    /**
+     * GET /api/calendar/today?ics={iCal link}&date=YYYY-MM-DD&tzOffset={minutes east of UTC}
+     * Today's events from the user's calendar plus the dress code they imply:
+     * { events: [{summary, start, allDay, dressCode}], suggestedEvent: "work", title: "Client meeting" }
+     */
+    @GetMapping("/calendar/today")
+    public ResponseEntity<?> calendarToday(@RequestParam("ics") String icsUrl,
+                                           @RequestParam(value = "date", required = false) String date,
+                                           @RequestParam(value = "tzOffset", defaultValue = "0") int tzOffsetMinutes) {
+        LocalDate day;
+        try {
+            day = date == null || date.isBlank() ? LocalDate.now() : LocalDate.parse(date);
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Map.of("error", "date must be YYYY-MM-DD"));
+        }
+        if (Math.abs(tzOffsetMinutes) > 14 * 60) {
+            return ResponseEntity.badRequest().body(Map.of("error", "tzOffset is out of range"));
+        }
+        try {
+            return ResponseEntity.ok(calendarService.today(icsUrl, day, tzOffsetMinutes));
+        } catch (CalendarService.CalendarException e) {
+            return ResponseEntity.status(e.getStatus()).body(Map.of("error", e.getMessage()));
+        }
     }
 
     /**
@@ -116,6 +175,7 @@ public class SmartIntegrationController {
         return ResponseEntity.ok(response);
     }
 
+    /** Mock kept for the judging demo; the Add to Wardrobe form uses the POST endpoint. */
     @GetMapping("/ocr/parse-receipt")
     public ResponseEntity<ReceiptOcrResponse> mockOcrReceipt() {
         ReceiptOcrResponse response = new ReceiptOcrResponse(

@@ -75,7 +75,10 @@ public class ClothingVisionService {
     private static final String UNKNOWN = "unknown";
 
     private static final String PROMPT = """
-            You are labelling a clothing photo for a wardrobe app.
+            You are labelling a photo for a wardrobe app.
+            0. First set imageKind: "receipt" if the photo is a shop receipt / bill / invoice,
+               "clothing" if it shows clothes or shoes, otherwise "other". For a receipt or other,
+               answer "unknown" for every other field and return an empty garments list.
             The photo may show one garment, or a person wearing several garments.
             1. In "garments", list each distinct visible garment, at most one entry per group:
                - "top": the outermost upper-body garment (shirt, t-shirt, blouse, top, jacket, sweater, hoodie)
@@ -127,17 +130,27 @@ public class ClothingVisionService {
                     "AI recognition is not configured on the server (GEMINI_API_KEY is missing). "
                     + "Fill in the details manually.");
         }
-
-        String url = "https://generativelanguage.googleapis.com/v1beta/models/"
-                + URLEncoder.encode(model.trim(), StandardCharsets.UTF_8) + ":generateContent";
         String body = buildRequestBody(Base64.getEncoder().encodeToString(imageBytes),
                 contentType == null || contentType.isBlank() ? "image/jpeg" : contentType);
+        return interpretResponse(callGemini(body), minConfidence);
+    }
+
+    /**
+     * Sends a ready-made generateContent request body to Gemini and returns the raw response body.
+     * Shared with ReceiptOcrService so both use the same key, model and error handling.
+     */
+    public String callGemini(String requestBody) {
+        if (!isConfigured()) {
+            throw new VisionUnavailableException("AI is not configured on the server (GEMINI_API_KEY is missing).");
+        }
+        String url = "https://generativelanguage.googleapis.com/v1beta/models/"
+                + URLEncoder.encode(model.trim(), StandardCharsets.UTF_8) + ":generateContent";
 
         HttpRequest request = HttpRequest.newBuilder(URI.create(url))
                 .timeout(Duration.ofSeconds(45))
                 .header("Content-Type", "application/json")
                 .header("x-goog-api-key", apiKey.trim())
-                .POST(HttpRequest.BodyPublishers.ofString(body))
+                .POST(HttpRequest.BodyPublishers.ofString(requestBody))
                 .build();
 
         HttpResponse<String> response;
@@ -164,8 +177,7 @@ public class ClothingVisionService {
             log.error("Gemini error ({}): {}", status, abbreviate(response.body()));
             throw new VisionAnalysisException(502, "The AI service returned an error (HTTP " + status + ").");
         }
-
-        return interpretResponse(response.body(), minConfidence);
+        return response.body();
     }
 
     // ── Request / response handling (static so it can be unit-tested without HTTP) ──
@@ -180,12 +192,13 @@ public class ClothingVisionService {
                 +   "\"temperature\":0,"
                 +   "\"responseMimeType\":\"application/json\","
                 +   "\"responseSchema\":{\"type\":\"OBJECT\",\"properties\":{"
+                +     "\"imageKind\":{\"type\":\"STRING\",\"enum\":[\"clothing\",\"receipt\",\"other\"]},"
                 +     garmentProperties() + ","
                 +     "\"garments\":{\"type\":\"ARRAY\",\"items\":{\"type\":\"OBJECT\",\"properties\":{"
                 +       "\"group\":{\"type\":\"STRING\",\"enum\":" + jsonArray(GROUPS) + "},"
                 +       garmentProperties()
                 +     "},\"required\":[\"group\"," + REQUIRED_FIELDS + "]}}"
-                +   "},\"required\":[" + REQUIRED_FIELDS + ",\"garments\"]}"
+                +   "},\"required\":[\"imageKind\"," + REQUIRED_FIELDS + ",\"garments\"]}"
                 + "}}";
     }
 
@@ -207,6 +220,33 @@ public class ClothingVisionService {
      */
     @SuppressWarnings("unchecked")
     static ClothingAnalysisResponse interpretResponse(String responseBody, double threshold) {
+        Map<String, Object> fields = extractJson(responseBody);
+
+        Double categoryConf = number(fields.get("categoryConfidence"));
+        Double colorConf = number(fields.get("colorConfidence"));
+        Double patternConf = number(fields.get("patternConfidence"));
+
+        ClothingAnalysisResponse result = new ClothingAnalysisResponse(
+                accept(fields.get("category"), categoryConf, CATEGORIES, threshold),
+                accept(fields.get("color"), colorConf, COLORS, threshold),
+                accept(fields.get("pattern"), patternConf, PATTERNS, threshold),
+                categoryConf, colorConf, patternConf);
+        Object kind = fields.get("imageKind");
+        String k = kind instanceof String ks ? ks.trim().toLowerCase(Locale.ROOT) : "clothing";
+        result.setImageKind(List.of("clothing", "receipt", "other").contains(k) ? k : "clothing");
+        if (!result.getImageKind().equals("clothing")) {
+            // Not a clothing photo: never return garment values for it.
+            result.setCategory(null); result.setColor(null); result.setPattern(null);
+            result.setGarments(new ArrayList<>());
+        } else {
+            result.setGarments(interpretGarments(fields.get("garments"), threshold));
+        }
+        return result;
+    }
+
+    /** Pulls the model's JSON answer out of a generateContent response (shared with receipts). */
+    @SuppressWarnings("unchecked")
+    public static Map<String, Object> extractJson(String responseBody) {
         Map<String, Object> root;
         try {
             root = JsonParserFactory.getJsonParser().parseMap(responseBody);
@@ -233,25 +273,11 @@ public class ClothingVisionService {
         if (text.isEmpty()) {
             throw new VisionAnalysisException(422, "The AI could not analyse this image. Fill in the details manually.");
         }
-
-        Map<String, Object> fields;
         try {
-            fields = JsonParserFactory.getJsonParser().parseMap(stripCodeFence(text.toString()));
+            return JsonParserFactory.getJsonParser().parseMap(stripCodeFence(text.toString()));
         } catch (RuntimeException e) {
             throw new VisionAnalysisException(502, "The AI service returned an unreadable result.");
         }
-
-        Double categoryConf = number(fields.get("categoryConfidence"));
-        Double colorConf = number(fields.get("colorConfidence"));
-        Double patternConf = number(fields.get("patternConfidence"));
-
-        ClothingAnalysisResponse result = new ClothingAnalysisResponse(
-                accept(fields.get("category"), categoryConf, CATEGORIES, threshold),
-                accept(fields.get("color"), colorConf, COLORS, threshold),
-                accept(fields.get("pattern"), patternConf, PATTERNS, threshold),
-                categoryConf, colorConf, patternConf);
-        result.setGarments(interpretGarments(fields.get("garments"), threshold));
-        return result;
     }
 
     /** At most one garment per group (the most confident one); categories must fit their group. */
@@ -294,7 +320,7 @@ public class ClothingVisionService {
         return v;
     }
 
-    private static Double number(Object o) {
+    static Double number(Object o) {
         if (o instanceof Number n) return n.doubleValue();
         if (o instanceof String s) {
             try { return Double.parseDouble(s.trim()); } catch (NumberFormatException ignored) { return null; }

@@ -101,8 +101,12 @@ const DashboardPage = {
       this.renderStats(statsData, leastWornData);
       this.renderLeastWorn(leastWornData);
       this.renderContext(calendarData);
+<<<<<<< HEAD
       // "Your Closet, In Numbers" from the same real items (getLeastWornItems returns every item)
       if (window.WardrobeStories) WardrobeStories.update(leastWorn.status === 'fulfilled' ? leastWornData : []);
+=======
+      if (window.WardrobeStories) WardrobeStories.refresh();
+>>>>>>> 5e49c00 (basics)
     } catch (err) {
       console.error('Error loading dashboard:', err);
       Toast.error('Load Error', 'Unable to retrieve all dashboard metrics from the server.');

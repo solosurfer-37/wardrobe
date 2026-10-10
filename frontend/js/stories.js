@@ -79,5 +79,20 @@ window.WardrobeStories = (function () {
     render(fromItems(items));
   }
 
+<<<<<<< HEAD
   return { render, fromItems, update };
 })();
+=======
+    async function refresh() {
+    try {
+      render(fromItems(await API.getAllClothes()));
+    } catch (e) {
+      render(fromItems([])); // login nahi / error: zero dikhao, fake nahi
+    }
+  }
+
+  document.addEventListener('DOMContentLoaded', refresh);
+
+  return { render, fromItems, refresh };
+})();
+>>>>>>> 5e49c00 (basics)

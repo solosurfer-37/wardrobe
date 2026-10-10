@@ -115,6 +115,13 @@ public class ClothingVisionService {
     @Value("${gemini.model:gemini-flash-latest}")
     private String model;
 
+    /**
+     * Comma-separated models tried, in order, when the main model is busy or
+     * unavailable.
+     */
+    @Value("${gemini.fallback-models:gemini-flash-lite-latest,gemini-flash-latest}")
+    private String fallbackModels;
+
     @Value("${vision.min-confidence:0.6}")
     private double minConfidence;
 
@@ -172,16 +179,78 @@ public class ClothingVisionService {
      * response body.
      * Shared with ReceiptOcrService so both use the same key, model and error
      * handling.
+     *
+     * Gemini often answers 500/503 ("model overloaded") or times out when busy.
+     * Each model is
+     * tried up to MAX_ATTEMPTS times with a short back-off, then the next model in
+     * GEMINI_FALLBACK_MODELS is tried. The whole call stays inside TOTAL_BUDGET so
+     * the frontend
+     * (which waits longer) always gets a real answer instead of its own timeout.
      */
     public String callGemini(String requestBody) {
         if (!isConfigured()) {
             throw new VisionUnavailableException("AI is not configured on the server (GEMINI_API_KEY is missing).");
         }
+        List<String> models = new ArrayList<>();
+        models.add(model.trim());
+        if (fallbackModels != null) {
+            for (String m : fallbackModels.split(",")) {
+                String t = m.trim();
+                if (!t.isEmpty() && !models.contains(t))
+                    models.add(t);
+            }
+        }
+
+        long deadline = System.nanoTime() + TOTAL_BUDGET.toNanos();
+        VisionAnalysisException last = null;
+        for (String m : models) {
+            for (int attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+                long remainingMs = (deadline - System.nanoTime()) / 1_000_000;
+                if (remainingMs < 5_000) {
+                    throw last != null ? last : new VisionAnalysisException(502, "The AI service took too long.");
+                }
+                try {
+                    String body = callModelOnce(m, requestBody,
+                            Duration.ofMillis(Math.min(remainingMs, PER_ATTEMPT.toMillis())));
+                    if (!m.equals(model.trim()) || attempt > 1) {
+                        log.info("Gemini succeeded with model {} on attempt {}", m, attempt);
+                    }
+                    return body;
+                } catch (RetryableException e) {
+                    last = new VisionAnalysisException(502, e.getMessage());
+                    log.warn("Gemini model {} attempt {}/{} failed: {}", m, attempt, MAX_ATTEMPTS, e.getMessage());
+                    if (e.skipModel)
+                        break; // e.g. 404: this model name is not available, try the next one
+                    sleepQuietly(1_500L * attempt);
+                }
+            }
+        }
+        throw last != null ? last : new VisionAnalysisException(502, "The AI service returned an error.");
+    }
+
+    private static final int MAX_ATTEMPTS = 2;
+    private static final Duration PER_ATTEMPT = Duration.ofSeconds(40);
+    private static final Duration TOTAL_BUDGET = Duration.ofSeconds(85);
+
+    /**
+     * A failure worth trying again (overloaded, server error, timeout) or with
+     * another model (404).
+     */
+    private static class RetryableException extends RuntimeException {
+        final boolean skipModel;
+
+        RetryableException(String message, boolean skipModel) {
+            super(message);
+            this.skipModel = skipModel;
+        }
+    }
+
+    private String callModelOnce(String modelName, String requestBody, Duration timeout) {
         String url = "https://generativelanguage.googleapis.com/v1beta/models/"
-                + URLEncoder.encode(model.trim(), StandardCharsets.UTF_8) + ":generateContent";
+                + URLEncoder.encode(modelName, StandardCharsets.UTF_8) + ":generateContent";
 
         HttpRequest request = HttpRequest.newBuilder(URI.create(url))
-                .timeout(Duration.ofSeconds(90))
+                .timeout(timeout)
                 .header("Content-Type", "application/json")
                 .header("x-goog-api-key", apiKey.trim())
                 .POST(HttpRequest.BodyPublishers.ofString(requestBody))
@@ -191,16 +260,23 @@ public class ClothingVisionService {
         try {
             response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
         } catch (IOException e) {
-            throw new VisionAnalysisException(502, "Could not reach the AI service: " + e.getMessage());
+            throw new RetryableException("Could not reach the AI service: " + e.getMessage(), false);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             throw new VisionAnalysisException(502, "AI request was interrupted.");
         }
 
         int status = response.statusCode();
+        if (status >= 200 && status < 300) {
+            return response.body();
+        }
         if (status == 429) {
             throw new VisionAnalysisException(429,
                     "The AI service quota has been reached. Try again later or fill in the details manually.");
+        }
+        if (status == 404) {
+            log.error("Gemini model {} not found: {}", modelName, abbreviate(response.body()));
+            throw new RetryableException("The AI model '" + modelName + "' is not available (HTTP 404).", true);
         }
         if (status == 400 || status == 401 || status == 403) {
             log.error("Gemini rejected the request ({}): {}", status, abbreviate(response.body()));
@@ -208,11 +284,16 @@ public class ClothingVisionService {
                     "The AI service rejected the request (HTTP " + status
                             + "). Check GEMINI_API_KEY and GEMINI_MODEL.");
         }
-        if (status < 200 || status >= 300) {
-            log.error("Gemini error ({}): {}", status, abbreviate(response.body()));
-            throw new VisionAnalysisException(502, "The AI service returned an error (HTTP " + status + ").");
+        log.error("Gemini error ({}) from {}: {}", status, modelName, abbreviate(response.body()));
+        throw new RetryableException("The AI service returned an error (HTTP " + status + ").", false);
+    }
+
+    private static void sleepQuietly(long ms) {
+        try {
+            Thread.sleep(ms);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
         }
-        return response.body();
     }
 
     // ── Request / response handling (static so it can be unit-tested without HTTP)

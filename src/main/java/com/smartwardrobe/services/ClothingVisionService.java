@@ -25,19 +25,27 @@ import java.util.Map;
 /**
  * ClothingVisionService
  * ─────────────────────
- * AI clothing recognition for the Add to Wardrobe flow, backed by the Google Gemini API.
+ * AI clothing recognition for the Add to Wardrobe flow, backed by the Google
+ * Gemini API.
  *
- * Detects ONLY: clothing category (ClothingItem.type), primary colour and pattern — for the
- * main garment and, in the same single request, for each distinct garment in an outfit photo.
- * Season, occasion, brand, rating and price are never requested from the model; the user
+ * Detects ONLY: clothing category (ClothingItem.type), primary colour and
+ * pattern — for the
+ * main garment and, in the same single request, for each distinct garment in an
+ * outfit photo.
+ * Season, occasion, brand, rating and price are never requested from the model;
+ * the user
  * enters them by hand.
  *
- * The model is constrained to the values the application already uses (CONFIG.ALL_TYPES and
- * CONFIG.COLORS in the frontend) and may answer "unknown". Anything unknown, outside the
- * allowed lists, or below the confidence threshold is returned as null so the UI leaves the
+ * The model is constrained to the values the application already uses
+ * (CONFIG.ALL_TYPES and
+ * CONFIG.COLORS in the frontend) and may answer "unknown". Anything unknown,
+ * outside the
+ * allowed lists, or below the confidence threshold is returned as null so the
+ * UI leaves the
  * field unselected instead of inventing a value.
  *
- * One image = one request. The API key is read from GEMINI_API_KEY on the server only.
+ * One image = one request. The API key is read from GEMINI_API_KEY on the
+ * server only.
  */
 @Service
 public class ClothingVisionService {
@@ -56,14 +64,23 @@ public class ClothingVisionService {
             "white", "black", "blue", "red", "green", "navy",
             "gray", "brown", "beige", "pink", "yellow", "orange", "purple");
 
-    /** Pattern suggestions offered in the form (the pattern field itself stays free text). */
+    /**
+     * Pattern suggestions offered in the form (the pattern field itself stays free
+     * text).
+     */
     public static final List<String> PATTERNS = List.of(
             "solid", "striped", "checked", "graphic", "floral", "polka-dot");
 
-    /** Garment groups, matching what the in-browser clothing segmentation can isolate. */
+    /**
+     * Garment groups, matching what the in-browser clothing segmentation can
+     * isolate.
+     */
     public static final List<String> GROUPS = List.of("top", "bottom", "footwear", "dress");
 
-    /** Which group each category belongs to (a category in the wrong group is discarded). */
+    /**
+     * Which group each category belongs to (a category in the wrong group is
+     * discarded).
+     */
     private static final Map<String, String> CATEGORY_GROUP = Map.ofEntries(
             Map.entry("shirt", "top"), Map.entry("t-shirt", "top"), Map.entry("blouse", "top"), Map.entry("top", "top"),
             Map.entry("jacket", "top"), Map.entry("sweater", "top"), Map.entry("hoodie", "top"),
@@ -105,16 +122,31 @@ public class ClothingVisionService {
             .connectTimeout(Duration.ofSeconds(10))
             .build();
 
-    /** Thrown when recognition is not configured (no API key): the UI falls back to manual entry. */
+    /**
+     * Thrown when recognition is not configured (no API key): the UI falls back to
+     * manual entry.
+     */
     public static class VisionUnavailableException extends RuntimeException {
-        public VisionUnavailableException(String message) { super(message); }
+        public VisionUnavailableException(String message) {
+            super(message);
+        }
     }
 
-    /** Thrown when the AI provider fails, rejects the request or returns something unusable. */
+    /**
+     * Thrown when the AI provider fails, rejects the request or returns something
+     * unusable.
+     */
     public static class VisionAnalysisException extends RuntimeException {
         private final int status;
-        public VisionAnalysisException(int status, String message) { super(message); this.status = status; }
-        public int getStatus() { return status; }
+
+        public VisionAnalysisException(int status, String message) {
+            super(message);
+            this.status = status;
+        }
+
+        public int getStatus() {
+            return status;
+        }
     }
 
     public boolean isConfigured() {
@@ -128,7 +160,7 @@ public class ClothingVisionService {
         if (!isConfigured()) {
             throw new VisionUnavailableException(
                     "AI recognition is not configured on the server (GEMINI_API_KEY is missing). "
-                    + "Fill in the details manually.");
+                            + "Fill in the details manually.");
         }
         String body = buildRequestBody(Base64.getEncoder().encodeToString(imageBytes),
                 contentType == null || contentType.isBlank() ? "image/jpeg" : contentType);
@@ -136,8 +168,10 @@ public class ClothingVisionService {
     }
 
     /**
-     * Sends a ready-made generateContent request body to Gemini and returns the raw response body.
-     * Shared with ReceiptOcrService so both use the same key, model and error handling.
+     * Sends a ready-made generateContent request body to Gemini and returns the raw
+     * response body.
+     * Shared with ReceiptOcrService so both use the same key, model and error
+     * handling.
      */
     public String callGemini(String requestBody) {
         if (!isConfigured()) {
@@ -147,7 +181,7 @@ public class ClothingVisionService {
                 + URLEncoder.encode(model.trim(), StandardCharsets.UTF_8) + ":generateContent";
 
         HttpRequest request = HttpRequest.newBuilder(URI.create(url))
-                .timeout(Duration.ofSeconds(45))
+                .timeout(Duration.ofSeconds(90))
                 .header("Content-Type", "application/json")
                 .header("x-goog-api-key", apiKey.trim())
                 .POST(HttpRequest.BodyPublishers.ofString(requestBody))
@@ -171,7 +205,8 @@ public class ClothingVisionService {
         if (status == 400 || status == 401 || status == 403) {
             log.error("Gemini rejected the request ({}): {}", status, abbreviate(response.body()));
             throw new VisionAnalysisException(502,
-                    "The AI service rejected the request (HTTP " + status + "). Check GEMINI_API_KEY and GEMINI_MODEL.");
+                    "The AI service rejected the request (HTTP " + status
+                            + "). Check GEMINI_API_KEY and GEMINI_MODEL.");
         }
         if (status < 200 || status >= 300) {
             log.error("Gemini error ({}): {}", status, abbreviate(response.body()));
@@ -180,30 +215,30 @@ public class ClothingVisionService {
         return response.body();
     }
 
-    // ── Request / response handling (static so it can be unit-tested without HTTP) ──
+    // ── Request / response handling (static so it can be unit-tested without HTTP)
+    // ──
 
     static String buildRequestBody(String base64Image, String mimeType) {
         return "{"
                 + "\"contents\":[{\"parts\":["
-                +   "{\"text\":" + json(PROMPT) + "},"
-                +   "{\"inline_data\":{\"mime_type\":" + json(mimeType) + ",\"data\":" + json(base64Image) + "}}"
+                + "{\"text\":" + json(PROMPT) + "},"
+                + "{\"inline_data\":{\"mime_type\":" + json(mimeType) + ",\"data\":" + json(base64Image) + "}}"
                 + "]}],"
                 + "\"generationConfig\":{"
-                +   "\"temperature\":0,"
-                +   "\"responseMimeType\":\"application/json\","
-                +   "\"responseSchema\":{\"type\":\"OBJECT\",\"properties\":{"
-                +     "\"imageKind\":{\"type\":\"STRING\",\"enum\":[\"clothing\",\"receipt\",\"other\"]},"
-                +     garmentProperties() + ","
-                +     "\"garments\":{\"type\":\"ARRAY\",\"items\":{\"type\":\"OBJECT\",\"properties\":{"
-                +       "\"group\":{\"type\":\"STRING\",\"enum\":" + jsonArray(GROUPS) + "},"
-                +       garmentProperties()
-                +     "},\"required\":[\"group\"," + REQUIRED_FIELDS + "]}}"
-                +   "},\"required\":[\"imageKind\"," + REQUIRED_FIELDS + ",\"garments\"]}"
+                + "\"temperature\":0,"
+                + "\"responseMimeType\":\"application/json\","
+                + "\"responseSchema\":{\"type\":\"OBJECT\",\"properties\":{"
+                + "\"imageKind\":{\"type\":\"STRING\",\"enum\":[\"clothing\",\"receipt\",\"other\"]},"
+                + garmentProperties() + ","
+                + "\"garments\":{\"type\":\"ARRAY\",\"items\":{\"type\":\"OBJECT\",\"properties\":{"
+                + "\"group\":{\"type\":\"STRING\",\"enum\":" + jsonArray(GROUPS) + "},"
+                + garmentProperties()
+                + "},\"required\":[\"group\"," + REQUIRED_FIELDS + "]}}"
+                + "},\"required\":[\"imageKind\"," + REQUIRED_FIELDS + ",\"garments\"]}"
                 + "}}";
     }
 
-    private static final String REQUIRED_FIELDS =
-            "\"category\",\"categoryConfidence\",\"color\",\"colorConfidence\",\"pattern\",\"patternConfidence\"";
+    private static final String REQUIRED_FIELDS = "\"category\",\"categoryConfidence\",\"color\",\"colorConfidence\",\"pattern\",\"patternConfidence\"";
 
     private static String garmentProperties() {
         return "\"category\":" + enumSchema(CATEGORIES) + ","
@@ -215,7 +250,8 @@ public class ClothingVisionService {
     }
 
     /**
-     * Turns the raw Gemini response into a ClothingAnalysisResponse, dropping every value that is
+     * Turns the raw Gemini response into a ClothingAnalysisResponse, dropping every
+     * value that is
      * unknown, not in the allowed list, or below {@code threshold}.
      */
     @SuppressWarnings("unchecked")
@@ -236,7 +272,9 @@ public class ClothingVisionService {
         result.setImageKind(List.of("clothing", "receipt", "other").contains(k) ? k : "clothing");
         if (!result.getImageKind().equals("clothing")) {
             // Not a clothing photo: never return garment values for it.
-            result.setCategory(null); result.setColor(null); result.setPattern(null);
+            result.setCategory(null);
+            result.setColor(null);
+            result.setPattern(null);
             result.setGarments(new ArrayList<>());
         } else {
             result.setGarments(interpretGarments(fields.get("garments"), threshold));
@@ -244,7 +282,10 @@ public class ClothingVisionService {
         return result;
     }
 
-    /** Pulls the model's JSON answer out of a generateContent response (shared with receipts). */
+    /**
+     * Pulls the model's JSON answer out of a generateContent response (shared with
+     * receipts).
+     */
     @SuppressWarnings("unchecked")
     public static Map<String, Object> extractJson(String responseBody) {
         Map<String, Object> root;
@@ -256,7 +297,8 @@ public class ClothingVisionService {
 
         Object candidatesObj = root.get("candidates");
         if (!(candidatesObj instanceof List<?> candidates) || candidates.isEmpty()) {
-            throw new VisionAnalysisException(422, "The AI could not analyse this image. Fill in the details manually.");
+            throw new VisionAnalysisException(422,
+                    "The AI could not analyse this image. Fill in the details manually.");
         }
 
         StringBuilder text = new StringBuilder();
@@ -271,7 +313,8 @@ public class ClothingVisionService {
             }
         }
         if (text.isEmpty()) {
-            throw new VisionAnalysisException(422, "The AI could not analyse this image. Fill in the details manually.");
+            throw new VisionAnalysisException(422,
+                    "The AI could not analyse this image. Fill in the details manually.");
         }
         try {
             return JsonParserFactory.getJsonParser().parseMap(stripCodeFence(text.toString()));
@@ -280,21 +323,29 @@ public class ClothingVisionService {
         }
     }
 
-    /** At most one garment per group (the most confident one); categories must fit their group. */
+    /**
+     * At most one garment per group (the most confident one); categories must fit
+     * their group.
+     */
     private static List<ClothingAnalysisResponse.Garment> interpretGarments(Object raw, double threshold) {
         Map<String, ClothingAnalysisResponse.Garment> byGroup = new LinkedHashMap<>();
-        if (!(raw instanceof List<?> list)) return new ArrayList<>();
+        if (!(raw instanceof List<?> list))
+            return new ArrayList<>();
         for (Object o : list) {
-            if (!(o instanceof Map<?, ?> g)) continue;
-            if (!(g.get("group") instanceof String groupRaw)) continue;
+            if (!(o instanceof Map<?, ?> g))
+                continue;
+            if (!(g.get("group") instanceof String groupRaw))
+                continue;
             String group = groupRaw.trim().toLowerCase(Locale.ROOT);
-            if (!GROUPS.contains(group)) continue;
+            if (!GROUPS.contains(group))
+                continue;
 
             Double catConf = number(g.get("categoryConfidence"));
             Double colConf = number(g.get("colorConfidence"));
             Double patConf = number(g.get("patternConfidence"));
             String category = accept(g.get("category"), catConf, CATEGORIES, threshold);
-            if (category != null && !group.equals(CATEGORY_GROUP.get(category))) category = null;
+            if (category != null && !group.equals(CATEGORY_GROUP.get(category)))
+                category = null;
 
             ClothingAnalysisResponse.Garment garment = new ClothingAnalysisResponse.Garment(group, category,
                     accept(g.get("color"), colConf, COLORS, threshold),
@@ -313,17 +364,25 @@ public class ClothingVisionService {
     }
 
     private static String accept(Object value, Double confidence, List<String> allowed, double threshold) {
-        if (!(value instanceof String s)) return null;
+        if (!(value instanceof String s))
+            return null;
         String v = s.trim().toLowerCase(Locale.ROOT);
-        if (v.isEmpty() || v.equals(UNKNOWN) || !allowed.contains(v)) return null;
-        if (confidence == null || confidence < threshold) return null;
+        if (v.isEmpty() || v.equals(UNKNOWN) || !allowed.contains(v))
+            return null;
+        if (confidence == null || confidence < threshold)
+            return null;
         return v;
     }
 
     static Double number(Object o) {
-        if (o instanceof Number n) return n.doubleValue();
+        if (o instanceof Number n)
+            return n.doubleValue();
         if (o instanceof String s) {
-            try { return Double.parseDouble(s.trim()); } catch (NumberFormatException ignored) { return null; }
+            try {
+                return Double.parseDouble(s.trim());
+            } catch (NumberFormatException ignored) {
+                return null;
+            }
         }
         return null;
     }
@@ -338,18 +397,23 @@ public class ClothingVisionService {
 
     private static String jsonArray(List<String> values) {
         StringBuilder sb = new StringBuilder("[");
-        for (int i = 0; i < values.size(); i++) sb.append(i == 0 ? "" : ",").append(json(values.get(i)));
+        for (int i = 0; i < values.size(); i++)
+            sb.append(i == 0 ? "" : ",").append(json(values.get(i)));
         return sb.append(']').toString();
     }
 
     private static String enumSchema(List<String> values) {
         StringBuilder sb = new StringBuilder("{\"type\":\"STRING\",\"enum\":[");
-        for (String v : values) sb.append(json(v)).append(',');
+        for (String v : values)
+            sb.append(json(v)).append(',');
         sb.append(json(UNKNOWN)).append("]}");
         return sb.toString();
     }
 
-    /** Minimal JSON string encoder for the values above (prompt text, enum values, base64). */
+    /**
+     * Minimal JSON string encoder for the values above (prompt text, enum values,
+     * base64).
+     */
     static String json(String s) {
         StringBuilder sb = new StringBuilder("\"");
         for (int i = 0; i < s.length(); i++) {
@@ -361,8 +425,10 @@ public class ClothingVisionService {
                 case '\r' -> sb.append("\\r");
                 case '\t' -> sb.append("\\t");
                 default -> {
-                    if (c < 0x20) sb.append(String.format("\\u%04x", (int) c));
-                    else sb.append(c);
+                    if (c < 0x20)
+                        sb.append(String.format("\\u%04x", (int) c));
+                    else
+                        sb.append(c);
                 }
             }
         }
@@ -370,7 +436,8 @@ public class ClothingVisionService {
     }
 
     private static String abbreviate(String s) {
-        if (s == null) return "";
+        if (s == null)
+            return "";
         return s.length() > 500 ? s.substring(0, 500) + "…" : s;
     }
 }

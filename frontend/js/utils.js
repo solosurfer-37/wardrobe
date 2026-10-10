@@ -66,7 +66,7 @@ const Utils = {
    */
   formatPrice(price) {
     if (price == null || price === 0) return '—';
-    return '$' + Number(price).toFixed(2);
+    return '₹' + Number(price).toLocaleString('en-IN', { maximumFractionDigits: 2 });
   },
 
   /**

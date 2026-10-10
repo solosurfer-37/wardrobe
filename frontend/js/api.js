@@ -254,7 +254,7 @@ const API = {
    * for the main garment and per garment group. Unsure values come back as null.
    */
   async analyzeClothingImage(file) {
-    return this._postImage('/api/vision/analyze-image', file, 30000);
+    return this._postImage('/api/vision/analyze-image', file, 60000);
   },
 
   /**

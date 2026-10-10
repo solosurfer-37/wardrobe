@@ -826,11 +826,10 @@ const App = {
         ? 'Outlined with SAM 3'
         : 'Cut out with the on-device clothing model' + (extraction.fallbackReason ? ` (${extraction.fallbackReason})` : '');
       let note = ok.length
-        ? `Extracted ${ok.length} garment${ok.length > 1 ? 's' : ''} (${ok.map(g => g.name.toLowerCase()).join(', ')}). ` +
-          `Tick the ones to add — each becomes its own wardrobe item. ${how}; pixels are copied unchanged from your photo, and parts hidden by arms, hair or other clothes stay missing.`
+        ? 'Tick items you want to add'
         : 'No garment could be isolated reliably, so nothing was extracted. You can still add the original photo.';
       if (failed.length) note += ` Not extracted: ${failed.map(g => g.name.toLowerCase()).join(', ')} (see the cards).`;
-      setNote(note, ok.length ? 'info' : 'error');
+      setNote(note.trim(), ok.length ? 'info' : 'error');
     }
 
     const runBeautify = async ({ force = false } = {}) => {

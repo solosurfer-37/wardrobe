@@ -196,7 +196,9 @@ public class OutfitEngine {
         List<ClothingItem> bottoms = pool(closet, Slot.BOTTOM, w, day);
         List<ClothingItem> shoes   = pool(closet, Slot.SHOES, w, day);
         List<ClothingItem> outers  = pool(closet, Slot.OUTER, w, day);
-        if (tops.isEmpty() || bottoms.isEmpty() || shoes.isEmpty()) return List.of();
+        if (tops.isEmpty() || bottoms.isEmpty()) return List.of();
+        // No shoes saved: still suggest top + bottom (shoes are optional).
+        if (shoes.isEmpty()) { shoes = new ArrayList<>(); shoes.add(null); }
 
         boolean closetHasOuter = closet.stream().anyMatch(i -> slotOf(i) == Slot.OUTER);
         LayerMode mode = layerMode(w, !outers.isEmpty());
@@ -289,10 +291,10 @@ public class OutfitEngine {
             for (ClothingItem bottom : bottoms) {
                 if (enforceColors && clash(top, bottom)) continue;
                 for (ClothingItem shoe : shoes) {
-                    if (enforceColors && (clash(top, shoe) || clash(bottom, shoe))) continue;
+                    if (enforceColors && shoe != null && (clash(top, shoe) || clash(bottom, shoe))) continue;
                     for (ClothingItem outer : outerOptions) {
                         if (enforceColors && outer != null
-                                && (clash(outer, top) || clash(outer, bottom) || clash(outer, shoe))) continue;
+                                && (clash(outer, top) || clash(outer, bottom) || (shoe != null && clash(outer, shoe)))) continue;
                         out.add(new Scored(top, bottom, shoe, outer, score(top, bottom, shoe, outer, ctx)));
                     }
                 }
@@ -370,7 +372,8 @@ public class OutfitEngine {
     private double rainScore(ClothingItem shoes, ClothingItem outer, WeatherContext w) {
         if (!w.isRainy()) return 1.0;
         double outerPart = outer != null ? rainSuitability(outer) : 0.5;
-        return 0.7 * rainSuitability(shoes) + 0.3 * outerPart;
+        double shoePart = shoes != null ? rainSuitability(shoes) : 0.5;
+        return 0.7 * shoePart + 0.3 * outerPart;
     }
 
     private double rainSuitability(ClothingItem item) {
@@ -492,7 +495,7 @@ public class OutfitEngine {
         if (c.missingOuter()) {
             parts.add("It's cold but no jackets or sweaters are saved; adding one would complete the look.");
         }
-        if (w.isRainy()) {
+        if (w.isRainy() && s.shoes() != null) {
             parts.add("Your " + name(s.shoes())
                     + (rainSuitability(s.shoes()) >= 0.6 ? " handles the rain well." : " is the driest option available."));
         }
@@ -542,7 +545,7 @@ public class OutfitEngine {
         List<ClothingItem> l = new ArrayList<>(4);
         l.add(top);
         l.add(bottom);
-        l.add(shoes);
+        if (shoes != null) l.add(shoes);
         if (outer != null) l.add(outer);
         return Collections.unmodifiableList(l);
     }

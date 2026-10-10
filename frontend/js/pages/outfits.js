@@ -190,10 +190,10 @@ const OutfitsPage = {
           <i data-lucide="hanger" class="empty-icon"></i>
           ${this.result && this.result.itemCount >= 3 ? `
           <h4>No Outfit Fits Today</h4>
-          <p>Every suitable combination uses something worn in the last 2 days, or doesn't suit today's weather and dress code. Try another dress code, or add more pieces.</p>
+          <p>Your saved tops and bottoms couldn't be combined today. Try another dress code, or add more pieces.</p>
           <p class="section-subtitle" style="margin-top:var(--space-2);">${this.describeContext()}</p>` : `
           <h4>Not Enough Items for Outfits</h4>
-          <p>The AI needs at least one top, one bottom, and one footwear item to construct valid outfits.</p>`}
+          <p>Add at least one top and one bottom to get outfit suggestions. Shoes and outerwear are optional, but they make the outfits more complete.</p>`}
           <a href="wardrobe.html" class="btn btn-primary btn-sm" style="margin-top:var(--space-4);">
             <i data-lucide="plus"></i> Add Items to Wardrobe
           </a>
@@ -334,7 +334,7 @@ const OutfitsPage = {
     const items = [
       { label: 'Top',       item: outfit.top },
       { label: 'Bottom',    item: outfit.bottom },
-      { label: 'Footwear',  item: outfit.footwear },
+      ...(outfit.footwear ? [{ label: 'Footwear', item: outfit.footwear }] : []),
       ...(outfit.outerwear ? [{ label: 'Outerwear', item: outfit.outerwear }] : []),
     ];
     const totalCost   = items.reduce((s, i) => s + (i.item.price || 0), 0);

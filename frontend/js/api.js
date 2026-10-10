@@ -39,7 +39,7 @@ const DB = {
   },
 
   /** frontend shape -> DB row */
-    toRow(i) {
+  toRow(i) {
     const row = {};
     if (i.type !== undefined) row.type = i.type;
     if (i.color !== undefined) row.color = i.color;
@@ -49,10 +49,12 @@ const DB = {
     if (i.wearCount !== undefined) row.wear_count = i.wearCount;
     if (i.lastWornDate !== undefined) row.last_worn_date = i.lastWornDate;
     if (i.name !== undefined) row.name = i.name;
+    // Details entered in the Add to Wardrobe form (existing columns)
     if (i.brand !== undefined) row.brand = i.brand;
     if (i.season !== undefined) row.season = i.season;
     if (i.occasion !== undefined) row.occasion = i.occasion;
-    if (i.rating !== undefined) row.rating = i.rating === '' || i.rating === null ? null : Number(i.rating);
+    if (i.rating !== undefined) row.rating = i.rating;
+    if (i.originalImagePath !== undefined) row.original_image_path = i.originalImagePath;
     return row;
   },
 };
@@ -98,12 +100,14 @@ const Logic = {
 
     const tops = pick('tops'), bottoms = pick('bottoms'), shoes = pick('shoes'), outers = pick('outer');
     const combos = [];
-    for (const t of tops) for (const b of bottoms) for (const s of shoes) {
-      if (isClash(t.color, b.color) || isClash(t.color, s.color) || isClash(b.color, s.color)) continue;
-      const out = outers.find(o => !isClash(o.color, t.color) && !isClash(o.color, b.color) && !isClash(o.color, s.color));
+    const shoeOpts = shoes.length ? shoes : [null];   // shoes are optional
+    for (const t of tops) for (const b of bottoms) for (const s of shoeOpts) {
+      const sc = s ? s.color : null;
+      if (isClash(t.color, b.color) || isClash(t.color, sc) || isClash(b.color, sc)) continue;
+      const out = outers.find(o => !isClash(o.color, t.color) && !isClash(o.color, b.color) && !isClash(o.color, sc));
       combos.push({
         top: t, bottom: b, footwear: s, outerwear: out || null,
-        totalWearCount: t.wearCount + b.wearCount + s.wearCount + (out ? out.wearCount : 0),
+        totalWearCount: t.wearCount + b.wearCount + (s ? s.wearCount : 0) + (out ? out.wearCount : 0),
       });
     }
     return combos.sort((a, b) => a.totalWearCount - b.totalWearCount).slice(0, 3);

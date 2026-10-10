@@ -101,6 +101,8 @@ const DashboardPage = {
       this.renderStats(statsData, leastWornData);
       this.renderLeastWorn(leastWornData);
       this.renderContext(calendarData);
+      // "Your Closet, In Numbers" from the same real items (getLeastWornItems returns every item)
+      if (window.WardrobeStories) WardrobeStories.update(leastWorn.status === 'fulfilled' ? leastWornData : []);
     } catch (err) {
       console.error('Error loading dashboard:', err);
       Toast.error('Load Error', 'Unable to retrieve all dashboard metrics from the server.');
@@ -113,7 +115,10 @@ const DashboardPage = {
 
     const totalItems = stats ? stats.totalItems : (items ? items.length : 0);
     const utilizationRate = stats ? `${Math.round(stats.utilizationRate)}%` : '—';
-    const avgCpw = stats && stats.averageCostPerWear != null ? `$${stats.averageCostPerWear.toFixed(2)}` : '$0.00';
+    const hasWears = Array.isArray(items) && items.some(i => (Number(i.wearCount) || 0) > 0);
+    const avgCpw = stats && hasWears && stats.averageCostPerWear != null
+      ? '₹' + Number(stats.averageCostPerWear).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+      : '—';
     const underutilizedCount = items ? items.filter(i => (i.wearCount || 0) <= 2).length : 0;
 
     grid.innerHTML = `
@@ -141,7 +146,7 @@ const DashboardPage = {
 
       <div class="card stat-card">
         <div class="stat-icon sky">
-          <i data-lucide="dollar-sign"></i>
+          <i data-lucide="indian-rupee"></i>
         </div>
         <div class="stat-content">
           <div class="stat-label">Avg. Cost / Wear</div>

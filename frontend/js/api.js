@@ -90,8 +90,12 @@ const Logic = {
       ['brown', 'black'], ['navy', 'black'], ['green', 'orange'], ['purple', 'red'],
       ['yellow', 'green'], ['brown', 'gray'],
     ];
+    // Items can have several colours ("navy,white"): main colours decide, a shared colour never clashes.
+    const cols = (c) => String(c || '').toLowerCase().split(',').map(x => x.trim()).filter(Boolean);
     const isClash = (c1, c2) => {
-      const a = (c1 || '').toLowerCase().trim(), b = (c2 || '').toLowerCase().trim();
+      const ca = cols(c1), cb = cols(c2);
+      if (!ca.length || !cb.length || ca.some(c => cb.includes(c))) return false;
+      const a = ca[0], b = cb[0];
       return clash.some(([x, y]) => (a === x && b === y) || (a === y && b === x));
     };
     const limit = Date.now() - 2 * 86400000;

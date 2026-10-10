@@ -197,7 +197,7 @@ const DashboardPage = {
           <div class="item-row-icon">${img}</div>
           <div class="item-row-info">
             <div class="item-row-name">${Utils.escapeHTML(item.type)}</div>
-            <div class="item-row-detail">${Utils.capitalize(item.color)} • ${item.pattern || 'Solid'}</div>
+            <div class="item-row-detail">${Utils.escapeHTML(Utils.formatList(item.color, ' / '))} • ${item.pattern || 'Solid'}</div>
           </div>
           <div class="item-row-badge">
             <span class="badge ${item.wearCount === 0 ? 'badge-rose' : 'badge-neutral'}">

@@ -265,7 +265,7 @@ const AnalyticsPage = {
           </div>
           <div class="item-row-info">
             <div class="item-row-name">${Utils.escapeHTML(item.type)}</div>
-            <div class="item-row-detail">${Utils.capitalize(item.color)} • Last worn: ${Utils.timeAgo(item.lastWornDate)}</div>
+            <div class="item-row-detail">${Utils.escapeHTML(Utils.formatList(item.color, ' / '))} • Last worn: ${Utils.timeAgo(item.lastWornDate)}</div>
           </div>
           <div class="item-row-badge">
             <span class="badge ${isLeast ? 'badge-rose' : 'badge-olive'}">

@@ -116,11 +116,11 @@
               </p>
               <div class="welcome-actions">
                 <a href="outfits.html" class="btn btn-generate">
-                  <!-- <i data-lucide="sparkles"></i> -->
+                  <i data-lucide="sparkles"></i>
                   Generate Today's Outfit
                 </a>
                 <a href="wardrobe.html" class="btn btn-wardrobe-link">
-                  <!-- <i data-lucide="shirt"></i> -->
+                  <i data-lucide="shirt"></i>
                   View Wardrobe
                 </a>
               </div>
@@ -311,23 +311,22 @@
             </div>
 
             <div class="form-group">
-              <label for="clothing-color">Color <span class="required">*</span> <span class="ai-badge" id="ai-badge-color" hidden>AI</span></label>
-              <select id="clothing-color" data-ai-field="color">
-                <option value="">Select color...</option>
-                <option value="white">White</option>
-                <option value="black">Black</option>
-                <option value="blue">Blue</option>
-                <option value="red">Red</option>
-                <option value="green">Green</option>
-                <option value="navy">Navy</option>
-                <option value="gray">Gray</option>
-                <option value="brown">Brown</option>
-                <option value="beige">Beige</option>
-                <option value="pink">Pink</option>
-                <option value="yellow">Yellow</option>
-                <option value="orange">Orange</option>
-                <option value="purple">Purple</option>
-              </select>
+              <label id="label-clothing-color">Color <span class="required">*</span> <span class="ai-badge" id="ai-badge-color" hidden>AI</span> <span class="field-hint">(select all that apply)</span></label>
+              <div class="chip-options chip-options-wrap" id="clothing-color" role="group" aria-labelledby="label-clothing-color" data-ai-field="color">
+                <label class="chip-option"><input type="checkbox" name="clothing-color" value="white" /> <span><i class="chip-swatch" data-color="white"></i>White</span></label>
+                <label class="chip-option"><input type="checkbox" name="clothing-color" value="black" /> <span><i class="chip-swatch" data-color="black"></i>Black</span></label>
+                <label class="chip-option"><input type="checkbox" name="clothing-color" value="blue" /> <span><i class="chip-swatch" data-color="blue"></i>Blue</span></label>
+                <label class="chip-option"><input type="checkbox" name="clothing-color" value="red" /> <span><i class="chip-swatch" data-color="red"></i>Red</span></label>
+                <label class="chip-option"><input type="checkbox" name="clothing-color" value="green" /> <span><i class="chip-swatch" data-color="green"></i>Green</span></label>
+                <label class="chip-option"><input type="checkbox" name="clothing-color" value="navy" /> <span><i class="chip-swatch" data-color="navy"></i>Navy</span></label>
+                <label class="chip-option"><input type="checkbox" name="clothing-color" value="gray" /> <span><i class="chip-swatch" data-color="gray"></i>Gray</span></label>
+                <label class="chip-option"><input type="checkbox" name="clothing-color" value="brown" /> <span><i class="chip-swatch" data-color="brown"></i>Brown</span></label>
+                <label class="chip-option"><input type="checkbox" name="clothing-color" value="beige" /> <span><i class="chip-swatch" data-color="beige"></i>Beige</span></label>
+                <label class="chip-option"><input type="checkbox" name="clothing-color" value="pink" /> <span><i class="chip-swatch" data-color="pink"></i>Pink</span></label>
+                <label class="chip-option"><input type="checkbox" name="clothing-color" value="yellow" /> <span><i class="chip-swatch" data-color="yellow"></i>Yellow</span></label>
+                <label class="chip-option"><input type="checkbox" name="clothing-color" value="orange" /> <span><i class="chip-swatch" data-color="orange"></i>Orange</span></label>
+                <label class="chip-option"><input type="checkbox" name="clothing-color" value="purple" /> <span><i class="chip-swatch" data-color="purple"></i>Purple</span></label>
+              </div>
               <span class="form-error" id="error-color"></span>
             </div>
           </div>
@@ -358,16 +357,15 @@
 
           <div class="form-row-2">
             <div class="form-group">
-              <label for="clothing-occasion">Occasion <span class="required">*</span></label>
-              <select id="clothing-occasion">
-                <option value="">Select occasion...</option>
-                <option value="daily">Daily / Casual</option>
-                <option value="work">Work</option>
-                <option value="formal">Formal</option>
-                <option value="party">Party</option>
-                <option value="sports">Sports / Gym</option>
-                <option value="travel">Travel</option>
-              </select>
+              <label id="label-clothing-occasion">Occasion <span class="required">*</span> <span class="field-hint">(select all that apply)</span></label>
+              <div class="chip-options chip-options-wrap" id="clothing-occasion" role="group" aria-labelledby="label-clothing-occasion">
+                <label class="chip-option"><input type="checkbox" name="clothing-occasion" value="daily" /> <span>Daily / Casual</span></label>
+                <label class="chip-option"><input type="checkbox" name="clothing-occasion" value="work" /> <span>Work</span></label>
+                <label class="chip-option"><input type="checkbox" name="clothing-occasion" value="formal" /> <span>Formal</span></label>
+                <label class="chip-option"><input type="checkbox" name="clothing-occasion" value="party" /> <span>Party</span></label>
+                <label class="chip-option"><input type="checkbox" name="clothing-occasion" value="sports" /> <span>Sports / Gym</span></label>
+                <label class="chip-option"><input type="checkbox" name="clothing-occasion" value="travel" /> <span>Travel</span></label>
+              </div>
               <span class="form-error" id="error-occasion"></span>
             </div>
 
@@ -439,6 +437,7 @@
    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <script src="js/auth.js"></script>
   <script src="js/config.js"></script>
+  <script src="js/dummyData.js"></script>
   <script src="js/api.js"></script>
   <script src="js/utils.js"></script>
   <script src="js/toast.js"></script>

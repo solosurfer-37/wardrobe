@@ -6,6 +6,7 @@ const WardrobePage = {
   items: [],
   activeCategory: 'all',
   selectedColor: 'all',
+  selectedOccasion: 'all',
   searchTerm: '',
   sortBy: 'least-worn',
 
@@ -53,6 +54,12 @@ const WardrobePage = {
             <select id="wardrobe-color-filter" class="select-input" style="height: 40px; padding: 0 var(--space-3); border-radius: var(--radius-md); border: 1px solid var(--border-medium); background: var(--bg-card); font-size: var(--text-sm);">
               <option value="all">All Colors</option>
               ${CONFIG.COLORS.map(c => `<option value="${c}" ${this.selectedColor === c ? 'selected' : ''}>${Utils.capitalize(c)}</option>`).join('')}
+            </select>
+
+            <select id="wardrobe-occasion-filter" class="select-input" style="height: 40px; padding: 0 var(--space-3); border-radius: var(--radius-md); border: 1px solid var(--border-medium); background: var(--bg-card); font-size: var(--text-sm);">
+              <option value="all">All Occasions</option>
+              ${[['daily', 'Daily / Casual'], ['work', 'Work'], ['formal', 'Formal'], ['party', 'Party'], ['sports', 'Sports / Gym'], ['travel', 'Travel']]
+                .map(([v, l]) => `<option value="${v}" ${this.selectedOccasion === v ? 'selected' : ''}>${l}</option>`).join('')}
             </select>
 
             <select id="wardrobe-sort" class="select-input" style="height: 40px; padding: 0 var(--space-3); border-radius: var(--radius-md); border: 1px solid var(--border-medium); background: var(--bg-card); font-size: var(--text-sm);">
@@ -121,6 +128,16 @@ const WardrobePage = {
       });
     }
 
+    // Occasion filter select (items can have several occasions)
+    const occasionSelect = document.getElementById('wardrobe-occasion-filter');
+    if (occasionSelect && !occasionSelect._hasHandler) {
+      occasionSelect._hasHandler = true;
+      occasionSelect.addEventListener('change', (e) => {
+        this.selectedOccasion = e.target.value;
+        this.renderFilteredItems();
+      });
+    }
+
     // Sort select
     const sortSelect = document.getElementById('wardrobe-sort');
     if (sortSelect && !sortSelect._hasHandler) {
@@ -184,7 +201,12 @@ const WardrobePage = {
 
     // Filter by Color
     if (this.selectedColor !== 'all') {
-      filtered = filtered.filter(item => (item.color || '').toLowerCase() === this.selectedColor.toLowerCase());
+      filtered = filtered.filter(item => Utils.splitList(item.color).includes(this.selectedColor.toLowerCase()));
+    }
+
+    // Filter by Occasion
+    if (this.selectedOccasion !== 'all') {
+      filtered = filtered.filter(item => Utils.splitList(item.occasion).includes(this.selectedOccasion));
     }
 
     // Filter by Search Query
@@ -193,7 +215,9 @@ const WardrobePage = {
         const type = (item.type || '').toLowerCase();
         const color = (item.color || '').toLowerCase();
         const pattern = (item.pattern || '').toLowerCase();
-        return type.includes(this.searchTerm) || color.includes(this.searchTerm) || pattern.includes(this.searchTerm);
+        const occasion = (item.occasion || '').toLowerCase();
+        return type.includes(this.searchTerm) || color.includes(this.searchTerm)
+          || pattern.includes(this.searchTerm) || occasion.includes(this.searchTerm);
       });
     }
 

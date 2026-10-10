@@ -26,7 +26,31 @@ const Utils = {
    * Get CSS background color for a color name.
    */
   getColorCSS(colorName) {
-    return CONFIG.COLOR_MAP[(colorName || '').toLowerCase().trim()] || '#D4C9B8';
+    const first = this.splitList(colorName)[0] || '';
+    return CONFIG.COLOR_MAP[first] || '#D4C9B8';
+  },
+
+  /** "Navy, white" -> ['navy', 'white']. Colour, occasion and season are comma-separated lists. */
+  splitList(value) {
+    const out = [];
+    String(value || '').split(',').forEach(p => {
+      const v = p.trim().toLowerCase();
+      if (v && !out.includes(v)) out.push(v);
+    });
+    return out;
+  },
+
+  /** "navy,white" -> "Navy, White" (or with a custom separator). */
+  formatList(value, sep = ', ') {
+    return this.splitList(value).map(v => this.capitalize(v)).join(sep);
+  },
+
+  /** One colour dot per colour of the item. */
+  colorDots(value) {
+    const cols = this.splitList(value);
+    if (!cols.length) return `<span class="color-dot" style="background:#D4C9B8"></span>`;
+    return `<span class="color-dots">${cols.map(c =>
+      `<span class="color-dot" style="background:${CONFIG.COLOR_MAP[c] || '#D4C9B8'}"></span>`).join('')}</span>`;
   },
 
   /**
@@ -93,8 +117,8 @@ const Utils = {
         <div class="clothing-card-type">${this.escapeHTML(this.capitalize(item.type))}</div>
         <div class="clothing-card-meta">
           <span class="badge badge-neutral">
-            <span class="color-dot" style="background:${this.getColorCSS(item.color)}"></span>
-            ${this.escapeHTML(this.capitalize(item.color || ''))}
+            ${this.colorDots(item.color)}
+            ${this.escapeHTML(this.formatList(item.color, ' / '))}
           </span>
           ${item.pattern ? `<span class="badge badge-neutral">${this.escapeHTML(this.capitalize(item.pattern))}</span>` : ''}
           <span class="badge badge-olive">${item.wearCount || 0} wears</span>
@@ -134,10 +158,10 @@ const Utils = {
         <span class="detail-field-value">${this.getCategoryLabel(item.type)}</span>
       </div>
       <div class="detail-field">
-        <span class="detail-field-label">Color</span>
+        <span class="detail-field-label">${this.splitList(item.color).length > 1 ? 'Colors' : 'Color'}</span>
         <span class="detail-field-value" style="display:flex;align-items:center;gap:8px">
-          <span class="color-dot" style="background:${this.getColorCSS(item.color)}"></span>
-          ${this.escapeHTML(this.capitalize(item.color || ''))}
+          ${this.colorDots(item.color)}
+          ${this.escapeHTML(this.formatList(item.color))}
         </span>
       </div>
       <div class="detail-field">
@@ -150,7 +174,7 @@ const Utils = {
       </div>` : ''}
       ${item.occasion ? `<div class="detail-field">
         <span class="detail-field-label">Occasion</span>
-        <span class="detail-field-value">${this.escapeHTML(this.capitalize(item.occasion))}</span>
+        <span class="detail-field-value">${this.escapeHTML(this.formatList(item.occasion))}</span>
       </div>` : ''}
       ${item.brand ? `<div class="detail-field">
         <span class="detail-field-label">Brand</span>

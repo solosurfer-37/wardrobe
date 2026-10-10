@@ -303,11 +303,15 @@ public class OutfitEngine {
         return out;
     }
 
+    /**
+     * Items can have several colours ("navy,white"). Two items clash when their main (first)
+     * colours clash and they share no colour that would tie them together.
+     */
     private boolean clash(ClothingItem a, ClothingItem b) {
-        String c1 = norm(a.getColor());
-        String c2 = norm(b.getColor());
-        if (c1.equals(c2)) return false;                 // same color never clashes
-        return CLASHING_PAIRS.contains(Set.of(c1, c2));
+        List<String> ca = colorsOf(a), cb = colorsOf(b);
+        if (ca.isEmpty() || cb.isEmpty()) return false;
+        for (String c : ca) if (cb.contains(c)) return false;   // a shared colour never clashes
+        return CLASHING_PAIRS.contains(Set.of(ca.get(0), cb.get(0)));
     }
 
     // ═════════════════════════════════════════════════════════════════
@@ -352,7 +356,27 @@ public class OutfitEngine {
         }
         double fit = clamp(1 - Math.abs(avg - event.formality()) / 3.0, 0, 1);
         double coherence = clamp(1 - (max - min) / 4.0, 0, 1);   // no tuxedo shoes with a hoodie
-        return 0.7 * fit + 0.3 * coherence;
+        return 0.5 * fit + 0.2 * coherence + 0.3 * occasionMatch(p, event);
+    }
+
+    /** Occasion tags the user gave each item (several allowed) that suit each dress code. */
+    private static final Map<Event, Set<String>> OCCASIONS_FOR_EVENT = Map.of(
+            Event.FORMAL,  Set.of("formal"),
+            Event.WORK,    Set.of("work", "formal"),
+            Event.PARTY,   Set.of("party"),
+            Event.COLLEGE, Set.of("daily", "travel", "work"),
+            Event.CASUAL,  Set.of("daily", "travel", "sports"));
+
+    /** Share of pieces the user tagged for this dress code (untagged pieces count as neutral). */
+    private double occasionMatch(List<ClothingItem> p, Event event) {
+        Set<String> wanted = OCCASIONS_FOR_EVENT.getOrDefault(event, Set.of());
+        double sum = 0;
+        for (ClothingItem i : p) {
+            List<String> tags = splitList(i.getOccasion());
+            if (tags.isEmpty()) { sum += 0.5; continue; }
+            sum += tags.stream().anyMatch(wanted::contains) ? 1.0 : 0.0;
+        }
+        return sum / p.size();
     }
 
     /** USAGE-DECAY: the longer an item sat unworn, the bigger the bonus. */
@@ -418,10 +442,14 @@ public class OutfitEngine {
         boolean gloomy = w.feelsLike() <= COLD_FEELS_LIKE || w.isRainy();
         double sum = 0;
         for (ClothingItem i : p) {
-            String col = norm(i.getColor());
-            if (hot)         sum += LIGHT_COLORS.contains(col) ? 1.0 : (DARK_COLORS.contains(col) ? 0.3 : 0.6);
-            else if (gloomy) sum += DARK_COLORS.contains(col) ? 1.0 : (LIGHT_COLORS.contains(col) ? 0.4 : 0.6);
-            else             sum += 0.6;
+            List<String> cols = colorsOf(i);
+            if (cols.isEmpty() || !(hot || gloomy)) { sum += 0.6; continue; }
+            double itemSum = 0;
+            for (String col : cols) {
+                if (hot) itemSum += LIGHT_COLORS.contains(col) ? 1.0 : (DARK_COLORS.contains(col) ? 0.3 : 0.6);
+                else     itemSum += DARK_COLORS.contains(col) ? 1.0 : (LIGHT_COLORS.contains(col) ? 0.4 : 0.6);
+            }
+            sum += itemSum / cols.size();
         }
         return sum / p.size();
     }
@@ -574,7 +602,22 @@ public class OutfitEngine {
     }
 
     private String name(ClothingItem i) {
-        return norm(i.getColor()) + " " + norm(i.getType());
+        return String.join("/", colorsOf(i)) + " " + norm(i.getType());
+    }
+
+    /** "Navy, White" -> [navy, white]. Colour and occasion are stored as comma-separated lists. */
+    static List<String> splitList(String raw) {
+        List<String> out = new ArrayList<>();
+        if (raw == null) return out;
+        for (String part : raw.split(",")) {
+            String v = norm(part);
+            if (!v.isEmpty() && !out.contains(v)) out.add(v);
+        }
+        return out;
+    }
+
+    private static List<String> colorsOf(ClothingItem i) {
+        return splitList(i.getColor());
     }
 
     private static String norm(String s) {

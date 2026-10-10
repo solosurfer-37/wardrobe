@@ -78,37 +78,13 @@
     } catch { return 'Your location'; }
   }
 
-    const fallback = () => load(26.9124, 75.7873, 'Jaipur');
-  const CACHE_KEY = 'wx_geo';
-  const TTL = 30 * 60 * 1000; // 30 min
+  const fallback = () => load(26.9124, 75.7873, 'Jaipur');
 
-  function readCache() {
-    try {
-      const c = JSON.parse(localStorage.getItem(CACHE_KEY));
-      return c && Date.now() - c.t < TTL ? c : null;
-    } catch { return null; }
-  }
-
-  async function fresh() {
+  if (navigator.geolocation) {
     navigator.geolocation.getCurrentPosition(
-      async p => {
-        const { latitude: lat, longitude: lon } = p.coords;
-        const name = await place(lat, lon);
-        localStorage.setItem(CACHE_KEY, JSON.stringify({ lat, lon, name, t: Date.now() }));
-        load(lat, lon, name);
-      },
-      () => {
-        // deny/fail hua: dobara na puche, 30 min tak Jaipur
-        localStorage.setItem(CACHE_KEY, JSON.stringify({ lat: 26.9124, lon: 75.7873, name: 'Jaipur', t: Date.now() }));
-        fallback();
-      },
-      { timeout: 6000, maximumAge: TTL }
+      async p => load(p.coords.latitude, p.coords.longitude, await place(p.coords.latitude, p.coords.longitude)),
+      fallback,
+      { timeout: 6000 }
     );
-  }
-
-  const cached = readCache();
-  if (cached) load(cached.lat, cached.lon, cached.name);
-  else if (navigator.geolocation) fresh();
-  else fallback();
+  } else fallback();
 })();
-

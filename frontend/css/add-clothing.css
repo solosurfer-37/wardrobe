@@ -213,3 +213,14 @@
 /* ── Receipt items: optional photo per card ── */
 .add-receipt-nophoto { color: var(--text-muted); background: var(--bg-secondary); border-radius: var(--radius-sm); }
 .add-item-photo { font-size: var(--text-xs); align-self: center; }
+
+/* Multi-select colour & occasion chips */
+.form-row-2 > .form-group:has(> .chip-options-wrap) { grid-column: 1 / -1; }
+.field-hint { font-weight: 400; color: var(--text-tertiary, #8a8a8a); font-size: 0.85em; }
+.chip-options.error { outline: 1px solid var(--color-error, #c0392b); outline-offset: 4px; border-radius: var(--radius-md, 8px); }
+.chip-swatch {
+  display: inline-block; width: 12px; height: 12px; border-radius: 50%;
+  margin-right: 6px; vertical-align: -1px; border: 1px solid rgba(0, 0, 0, 0.15);
+}
+.color-dots { display: inline-flex; gap: 3px; margin-right: 4px; vertical-align: middle; }
+.color-dots .color-dot { margin: 0; }

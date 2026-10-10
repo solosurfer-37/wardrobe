@@ -188,6 +188,46 @@ const App = {
     const imageUrlEl = $('clothing-image');
     const seasonInputs = () => Array.from(form.querySelectorAll('input[name="clothing-season"]'));
 
+    /**
+     * Colour and occasion are multi-select chip groups. Each group gets `value` (comma-separated,
+     * e.g. "navy,white") and `disabled`, so the rest of the form treats it like a single field.
+     */
+    const makeMultiField = (groupEl) => {
+      if (!groupEl || groupEl.tagName === 'SELECT') return groupEl;
+      const boxes = () => Array.from(groupEl.querySelectorAll('input[type="checkbox"]'));
+      // Keep the order the user picked in: the first colour is the item's main colour.
+      let order = [];
+      groupEl.addEventListener('change', (e) => {
+        const b = e.target;
+        if (!b || b.type !== 'checkbox') return;
+        order = order.filter(v => v !== b.value);
+        if (b.checked) order.push(b.value);
+      });
+      Object.defineProperty(groupEl, 'value', {
+        configurable: true,
+        get: () => {
+          const checked = boxes().filter(b => b.checked).map(b => b.value);
+          return [...order.filter(v => checked.includes(v)), ...checked.filter(v => !order.includes(v))].join(',');
+        },
+        set: (v) => {
+          const allowed = boxes().map(b => b.value);
+          order = String(v || '').toLowerCase().split(',').map(x => x.trim()).filter(x => x && allowed.includes(x));
+          boxes().forEach(b => { b.checked = order.includes(b.value); });
+        },
+      });
+      Object.defineProperty(groupEl, 'disabled', {
+        configurable: true,
+        get: () => boxes().every(b => b.disabled),
+        set: (d) => boxes().forEach(b => { b.disabled = !!d; }),
+      });
+      groupEl.querySelectorAll('.chip-swatch[data-color]').forEach(sw => {
+        sw.style.background = Utils.getColorCSS(sw.dataset.color);
+      });
+      return groupEl;
+    };
+    makeMultiField(colorEl);
+    makeMultiField(occasionEl);
+
     const MAX_IMAGE_SIZE = 10 * 1024 * 1024;
     const allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
     const AI_FIELDS = [
@@ -708,7 +748,9 @@ const App = {
       AI_FIELDS.forEach(f => {
         const value = v ? v[f.aiKey] : null;
         if (it.edited[f.key] || it.values[f.key]) return;   // never overwrite the user's choice
-        if (!value || (f.el.tagName === 'SELECT' && !Array.from(f.el.options).some(o => o.value === value))) {
+        const allowed = f.el.tagName === 'SELECT' ? Array.from(f.el.options).map(o => o.value)
+          : (f.el.tagName === 'DIV' ? Array.from(f.el.querySelectorAll('input')).map(i => i.value) : null);
+        if (!value || (allowed && !allowed.includes(value))) {
           missing.push(f.label);
           return;
         }
@@ -723,7 +765,7 @@ const App = {
       const a = state.analysis;
       const it = activeItem() || state.items.get('original');
       const whose = it.key === 'original' ? '' : ` for the ${Utils.escapeHTML(it.label.toLowerCase())}`;
-      const found = AI_FIELDS.filter(f => it.ai[f.key] && !it.edited[f.key]).map(f => Utils.escapeHTML(Utils.capitalize(it.values[f.key])));
+      const found = AI_FIELDS.filter(f => it.ai[f.key] && !it.edited[f.key]).map(f => Utils.escapeHTML(Utils.formatList(it.values[f.key], ' / ')));
       const missing = AI_FIELDS.filter(f => !it.values[f.key]).map(f => f.label);
       let html = found.length
         ? `<i data-lucide="sparkles"></i> AI detected${whose}: <strong>${found.join(' · ')}</strong>. Check and correct if needed.`
@@ -826,10 +868,11 @@ const App = {
         ? 'Outlined with SAM 3'
         : 'Cut out with the on-device clothing model' + (extraction.fallbackReason ? ` (${extraction.fallbackReason})` : '');
       let note = ok.length
-        ? 'Tick items you want to add'
+        ? `Extracted ${ok.length} garment${ok.length > 1 ? 's' : ''} (${ok.map(g => g.name.toLowerCase()).join(', ')}). ` +
+          `Tick the ones to add — each becomes its own wardrobe item. ${how}; pixels are copied unchanged from your photo, and parts hidden by arms, hair or other clothes stay missing.`
         : 'No garment could be isolated reliably, so nothing was extracted. You can still add the original photo.';
       if (failed.length) note += ` Not extracted: ${failed.map(g => g.name.toLowerCase()).join(', ')} (see the cards).`;
-      setNote(note.trim(), ok.length ? 'info' : 'error');
+      setNote(note, ok.length ? 'info' : 'error');
     }
 
     const runBeautify = async ({ force = false } = {}) => {
@@ -945,9 +988,9 @@ const App = {
     const itemProblems = (it) => {
       const v = it.values, p = [];
       if (!v.type) p.push(['error-type', typeEl, 'Select a type.']);
-      if (!v.color) p.push(['error-color', colorEl, 'Select a colour.']);
+      if (!v.color) p.push(['error-color', colorEl, 'Select at least one colour.']);
       if (!v.seasons.length) p.push(['error-season', null, 'Select at least one season.']);
-      if (!v.occasion) p.push(['error-occasion', occasionEl, 'Select an occasion.']);
+      if (!v.occasion) p.push(['error-occasion', occasionEl, 'Select at least one occasion.']);
       const price = String(v.price || '').trim();
       if (price && (!Number.isFinite(Number(price)) || Number(price) < 0)) p.push(['error-price', priceEl, 'Enter a price of 0 or more.']);
       return p;
@@ -1045,7 +1088,7 @@ const App = {
         }
 
         Toast.success(added.length > 1 ? `${added.length} Pieces Added` : 'Piece Added',
-          added.map(it => `${Utils.capitalize(it.values.color)} ${Utils.capitalize(it.values.type)}`).join(', ') + ' added to your wardrobe.');
+          added.map(it => `${Utils.formatList(it.values.color, ' / ')} ${Utils.capitalize(it.values.type)}`).join(', ') + ' added to your wardrobe.');
         state.saving = false;
         if (addModal) addModal.classList.remove('active');
         form.reset();

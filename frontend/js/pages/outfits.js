@@ -389,8 +389,8 @@ const OutfitsPage = {
           <div class="outfit-item-category">${label}</div>
           <div class="outfit-item-name">${Utils.escapeHTML(item.type)}</div>
           <div style="display:flex;align-items:center;gap:6px;margin-top:2px;">
-            <span class="color-dot" style="background:${Utils.getColorCSS(item.color)}"></span>
-            <span style="font-size:11px;color:var(--text-muted);text-transform:capitalize;">${Utils.escapeHTML(item.color)}</span>
+            ${Utils.colorDots(item.color)}
+            <span style="font-size:11px;color:var(--text-muted);">${Utils.escapeHTML(Utils.formatList(item.color, ' / '))}</span>
           </div>
         </div>
       </div>`;
